@@ -1,0 +1,124 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/robotis/turtlebot/protos/TurtleBot3Burger.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/robotis/protos/RobotisLds01.proto"
+
+WorldInfo {
+  info [
+    "TurtleBot3 Burger on a figure eight, static obstacles and a crossing pedestrian."
+    "Obstacles are placed by the scene_supervisor plugin from TB_SCENARIO."
+  ]
+  title "turtlebot-nmpc"
+  basicTimeStep 20
+}
+Viewpoint {
+  orientation -0.4975 0.4975 0.7106 1.906
+  position -1.06 -2.75 5.5
+}
+TexturedBackground {
+  skybox FALSE
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  translation -1.06 -0.75 0
+  floorSize 6 4.5
+  floorTileSize 0.5 0.5
+  wallHeight 0.3
+}
+DEF TB3 TurtleBot3Burger {
+  translation 0 0 0
+  controller "<extern>"
+  supervisor TRUE
+  extensionSlot [
+    Solid {
+      name "imu_link"
+    }
+    GPS {
+    }
+    InertialUnit {
+      name "inertial_unit"
+    }
+    RobotisLds01 {
+    }
+  ]
+}
+DEF OBS1 Solid {
+  translation 40 40 0.25
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.85 0.45 0.1
+        roughness 1
+        metalness 0
+      }
+      geometry Cylinder {
+        height 0.5
+        radius 0.15
+      }
+    }
+  ]
+  name "static cylinder"
+  boundingObject Cylinder {
+    height 0.5
+    radius 0.15
+  }
+}
+DEF OBS2 Solid {
+  translation 40 41 0.25
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.6 0.45 0.3
+        roughness 1
+        metalness 0
+      }
+      geometry Box {
+        size 0.3 0.3 0.5
+      }
+    }
+  ]
+  name "static box"
+  boundingObject Box {
+    size 0.3 0.3 0.5
+  }
+}
+DEF PED Solid {
+  translation 40 42 0.85
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.15 0.35 0.8
+        roughness 1
+        metalness 0
+      }
+      geometry Cylinder {
+        height 1.7
+        radius 0.15
+      }
+    }
+    Pose {
+      translation 0 0 0.97
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.9 0.75 0.6
+            roughness 1
+            metalness 0
+          }
+          geometry Sphere {
+            radius 0.12
+          }
+        }
+      ]
+    }
+  ]
+  name "pedestrian"
+  boundingObject Cylinder {
+    height 1.7
+    radius 0.15
+  }
+}

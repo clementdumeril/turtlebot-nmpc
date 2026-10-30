@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+build/
+install/
+log/
+.pytest_cache/
+c_generated_code/
+*.json.bak
+results/**/raw_video/
+results/**/sim.log

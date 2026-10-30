@@ -1,0 +1,12 @@
+# TurtleBot4 (iRobot Create 3 base). Hardware limit 0.306 m/s; Create 3 radius 0.171 m.
+# Lidar is an RPLIDAR A1 mounted rotated: its pose comes from TF (base_link -> rplidar_link).
+tb_nmpc:
+  ros__parameters:
+    robot_model: tb4
+    base_frame: base_link
+    robot_radius: 0.18
+    v_max: 0.25
+    v_ref: 0.22
+    w_max: 1.9
+    a_max: 0.5
+    alpha_max: 3.0

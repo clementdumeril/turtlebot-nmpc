@@ -1,0 +1,31 @@
+<?xml version="1.0" ?>
+<!-- Webots TurtleBot3 Burger, as in webots_ros2_turtlebot, plus the scene supervisor plugin. -->
+<robot name="TurtleBot3 Burger Webots">
+    <webots>
+        <device reference="LDS-01" type="Lidar">
+            <ros>
+                <enabled>true</enabled>
+                <updateRate>5</updateRate>
+                <topicName>/scan</topicName>
+                <alwaysOn>true</alwaysOn>
+                <frameName>LDS-01</frameName>
+            </ros>
+        </device>
+        <plugin type="webots_ros2_control::Ros2Control" />
+        <plugin type="tb_nmpc_sim.scene_supervisor.SceneSupervisor" />
+    </webots>
+
+    <ros2_control name="WebotsControl" type="system">
+        <hardware>
+            <plugin>webots_ros2_control::Ros2ControlSystem</plugin>
+        </hardware>
+        <joint name="right wheel motor">
+            <state_interface name="position"/>
+            <command_interface name="velocity"/>
+        </joint>
+        <joint name="left wheel motor">
+            <state_interface name="position"/>
+            <command_interface name="velocity"/>
+        </joint>
+    </ros2_control>
+</robot>

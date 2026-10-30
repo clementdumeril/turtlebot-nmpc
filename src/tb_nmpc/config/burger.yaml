@@ -1,0 +1,12 @@
+# TurtleBot3 Burger. Hardware limits: 0.22 m/s, 2.84 rad/s (ROBOTIS e-Manual).
+# The controllers are capped a little below them, the same caps for the NMPC and for Nav2.
+tb_nmpc:
+  ros__parameters:
+    robot_model: burger
+    base_frame: base_link
+    robot_radius: 0.105      # half of the 0.178 m width, plus the wheels
+    v_max: 0.20
+    v_ref: 0.18
+    w_max: 2.0
+    a_max: 0.5
+    alpha_max: 3.0
