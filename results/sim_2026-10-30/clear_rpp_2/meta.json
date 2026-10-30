@@ -1,0 +1,9 @@
+{
+ "controller": "rpp",
+ "scenario": "clear",
+ "completed": true,
+ "t_start": 5.5600000000000005,
+ "t_end": 70.24000000000001,
+ "rows": 3283,
+ "real": false
+}

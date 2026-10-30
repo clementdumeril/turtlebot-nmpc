@@ -20,7 +20,7 @@ from matplotlib.animation import FuncAnimation, PillowWriter  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metrics import LABEL, load  # noqa: E402
-from plot_benchmark import COLOR, clearance  # noqa: E402
+from plot_benchmark import COLOR, clearance, obstacle_patch  # noqa: E402
 
 from tb_nmpc_sim import scenarios  # noqa: E402
 
@@ -55,8 +55,8 @@ def main():
     artists = []
     for ax, (c, d, _), (t, t0, _) in zip(axes, runs, windows):
         ax.plot(path.xy[:, 0], path.xy[:, 1], color="0.7", lw=1, ls="--")
-        for _, ox, oy, r in scenarios.static_obstacles(args.scenario, path):
-            ax.add_patch(plt.Circle((ox, oy), r, color="0.35"))
+        for name, ox, oy, r in scenarios.static_obstacles(args.scenario, path):
+            ax.add_patch(obstacle_patch(name, ox, oy, r))
         trail, = ax.plot([], [], color=COLOR[c], lw=2)
         robot = plt.Circle((0, 0), scenarios.ROBOT_RADIUS, color=COLOR[c], alpha=0.9)
         ped = plt.Circle((40, 40), scenarios.RADIUS["PED"], color="0.15")

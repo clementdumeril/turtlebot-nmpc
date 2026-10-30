@@ -1,0 +1,9 @@
+{
+ "controller": "nmpc_nopred",
+ "scenario": "crossing",
+ "completed": true,
+ "t_start": 2.08,
+ "t_end": 56.800000000000004,
+ "rows": 2786,
+ "real": false
+}

@@ -24,11 +24,16 @@ from tb_nmpc_sim import scenarios  # noqa: E402
 COLOR = {"nmpc": "#1f5fbf", "nmpc_nopred": "#8a63c9", "mppi": "#d9672b", "rpp": "#3d9a50"}
 
 
+def obstacle_patch(name, ox, oy, r):
+    if name in scenarios.BOX_HALF:
+        h = scenarios.BOX_HALF[name]
+        return plt.Rectangle((ox - h, oy - h), 2 * h, 2 * h, color="0.35")
+    return plt.Circle((ox, oy), r, color="0.35")
+
+
 def clearance(d, scen, path):
     xy = np.stack([d["gt_x"], d["gt_y"]], axis=1)
-    c = np.full(len(xy), np.inf)
-    for _, ox, oy, r in scenarios.static_obstacles(scen, path):
-        c = np.minimum(c, np.hypot(xy[:, 0] - ox, xy[:, 1] - oy) - scenarios.ROBOT_RADIUS - r)
+    c = scenarios.static_clearance(scen, xy, path)
     w = d["ped_state"] == 1
     cp = np.hypot(xy[:, 0] - d["ped_x"], xy[:, 1] - d["ped_y"]) - scenarios.ROBOT_RADIUS - scenarios.RADIUS["PED"]
     return np.where(w, np.minimum(c, cp), c)
@@ -41,13 +46,13 @@ def main():
     figdir.mkdir(parents=True, exist_ok=True)
     path = scenarios.path()
     for scen in scenarios.SCENARIOS:
-        runs = {c: load(root / f"{scen}_{c}_{rep}") for c in CONTROLLERS if (root / f"{scen}_{c}_{rep}" / "run.csv").exists()}
+        runs = {c: load(root / f"{scen}_{c}_{rep}") for c in CONTROLLERS if (root / f"{scen}_{c}_{rep}" / "meta.json").exists()}
         if not runs:
             continue
         fig, ax = plt.subplots(figsize=(8, 4.6))
         ax.plot(path.xy[:, 0], path.xy[:, 1], color="0.6", lw=1, ls="--", label="reference")
-        for _, ox, oy, r in scenarios.static_obstacles(scen, path):
-            ax.add_patch(plt.Circle((ox, oy), r, color="0.35"))
+        for name, ox, oy, r in scenarios.static_obstacles(scen, path):
+            ax.add_patch(obstacle_patch(name, ox, oy, r))
         ped = scenarios.pedestrian(scen, path)
         if ped is not None:
             ax.annotate("", xy=ped[1], xytext=ped[0], arrowprops=dict(arrowstyle="->", color="0.3", lw=1.2))

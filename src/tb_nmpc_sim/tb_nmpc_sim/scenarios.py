@@ -14,6 +14,7 @@ PATH_SIZE = 1.5        # [m] half-width of the figure eight (3 m x 1.5 m, 9.15 m
 V_NOMINAL = 0.18       # [m/s] reference speed, used to time the crossing
 ROBOT_RADIUS = 0.105   # TurtleBot3 Burger
 RADIUS = {"OBS1": 0.15, "OBS2": 0.21, "PED": 0.15}  # cylinder r 0.15, box 0.3 x 0.3 (circumradius)
+BOX_HALF = {"OBS2": 0.15}  # OBS2 is an axis-aligned box: clearance uses its true shape
 
 # static: (DEF name, arc length s [m], lateral offset [m], + = left of the path)
 # ped: crossing point s, walking speed, start distance from the path. The person stands still
@@ -59,3 +60,19 @@ def pedestrian(name: str, p: Path | None = None):
     vel = -left * spec["speed"]
     s_trigger = spec["s"] - V_NOMINAL * spec["dist"] / spec["speed"]
     return start, end, vel, s_trigger
+
+
+def static_clearance(name: str, xy: np.ndarray, p: Path | None = None) -> np.ndarray:
+    """Edge-to-edge distance from the robot (centre xy (n, 2)) to the closest static obstacle."""
+    xy = np.atleast_2d(xy)
+    out = np.full(len(xy), np.inf)
+    for d, ox, oy, r in static_obstacles(name, p):
+        if d in BOX_HALF:
+            h = BOX_HALF[d]
+            dx = np.maximum(np.abs(xy[:, 0] - ox) - h, 0.0)
+            dy = np.maximum(np.abs(xy[:, 1] - oy) - h, 0.0)
+            dist = np.hypot(dx, dy)
+        else:
+            dist = np.hypot(xy[:, 0] - ox, xy[:, 1] - oy) - r
+        out = np.minimum(out, dist - ROBOT_RADIUS)
+    return out

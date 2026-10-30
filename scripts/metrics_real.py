@@ -57,7 +57,7 @@ def main():
     ap.add_argument("--edge", type=float, default=0.075)
     args = ap.parse_args()
     root = Path(args.root)
-    out = [run_metrics(r.parent, args.path_size, args.edge) for r in sorted(root.glob("*/run.csv"))]
+    out = [run_metrics(r.parent, args.path_size, args.edge) for r in sorted(root.glob("*/meta.json"))]
     if not out:
         raise SystemExit("no runs")
     with open(root / "summary_real.csv", "w", newline="") as f:

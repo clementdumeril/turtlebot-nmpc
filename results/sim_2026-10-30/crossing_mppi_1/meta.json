@@ -1,0 +1,9 @@
+{
+ "controller": "mppi",
+ "scenario": "crossing",
+ "completed": true,
+ "t_start": 5.66,
+ "t_end": 56.580000000000005,
+ "rows": 2596,
+ "real": false
+}

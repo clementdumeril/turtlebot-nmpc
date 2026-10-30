@@ -2,7 +2,7 @@
 
     python3 scripts/metrics.py results/sim_2026-10-30
 
-Reads every <dir>/<scenario>_<controller>/run.csv, writes <dir>/summary.csv and summary.md.
+Reads every <dir>/<scenario>_<controller>_<repeat>/run.csv (or run.csv.gz), writes <dir>/summary.csv and summary.md.
 - tracking error: distance from the robot to the figure eight over the whole lap (detours
   around obstacles included), RMSE and max. "odom" uses the odometry pose against the path
   anchored where the run started, which is what the controller sees; "true" uses the Webots
@@ -18,6 +18,7 @@ Reads every <dir>/<scenario>_<controller>/run.csv, writes <dir>/summary.csv and 
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 import sys
 from pathlib import Path
@@ -35,7 +36,8 @@ LABEL = {"nmpc": "NMPC + prediction", "nmpc_nopred": "NMPC, no prediction", "mpp
 
 
 def load(run_dir: Path):
-    rows = list(csv.DictReader(open(run_dir / "run.csv")))
+    f = run_dir / "run.csv"
+    rows = list(csv.DictReader(open(f) if f.exists() else gzip.open(run_dir / "run.csv.gz", "rt")))
     data = {k: np.array([float(r[k]) if r[k] not in ("", "nan") else np.nan for r in rows]) for k in rows[0]}
     meta = json.loads((run_dir / "meta.json").read_text())
     return data, meta
@@ -63,9 +65,7 @@ def run_metrics(run_dir: Path) -> dict:
     oxy = np.stack([d["odom_x"], d["odom_y"]], axis=1)
     opath = anchored(scenarios.PATH_SIZE, 1.0, (d["odom_x"][0], d["odom_y"][0], d["odom_yaw"][0]))
     cte_odom = opath.distance(oxy)
-    clear = np.full(len(t), np.inf)
-    for _, ox, oy, r in scenarios.static_obstacles(scen, path):
-        clear = np.minimum(clear, np.hypot(xy[:, 0] - ox, xy[:, 1] - oy) - scenarios.ROBOT_RADIUS - r)
+    clear = scenarios.static_clearance(scen, xy, path)
     walking = d["ped_state"] == 1
     if walking.any():
         cp = np.hypot(xy[:, 0] - d["ped_x"], xy[:, 1] - d["ped_y"]) - scenarios.ROBOT_RADIUS - scenarios.RADIUS["PED"]
@@ -124,7 +124,7 @@ def fmt(x, nd=1):
 def main():
     root = Path(sys.argv[1])
     out = []
-    for run in sorted(root.glob("*/run.csv")):
+    for run in sorted(root.glob("*/meta.json")):
         try:
             out.append(run_metrics(run.parent))
         except Exception as e:  # noqa: BLE001

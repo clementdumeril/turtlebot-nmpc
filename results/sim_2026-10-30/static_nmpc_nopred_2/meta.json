@@ -1,0 +1,9 @@
+{
+ "controller": "nmpc_nopred",
+ "scenario": "static",
+ "completed": true,
+ "t_start": 6.54,
+ "t_end": 59.2,
+ "rows": 2683,
+ "real": false
+}

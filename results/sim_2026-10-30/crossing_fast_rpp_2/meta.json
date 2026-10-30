@@ -1,0 +1,9 @@
+{
+ "controller": "rpp",
+ "scenario": "crossing_fast",
+ "completed": true,
+ "t_start": 6.880000000000001,
+ "t_end": 72.38000000000001,
+ "rows": 3325,
+ "real": false
+}

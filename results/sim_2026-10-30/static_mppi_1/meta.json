@@ -1,0 +1,9 @@
+{
+ "controller": "mppi",
+ "scenario": "static",
+ "completed": true,
+ "t_start": 3.56,
+ "t_end": 59.28,
+ "rows": 2836,
+ "real": false
+}

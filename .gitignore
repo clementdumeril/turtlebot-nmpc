@@ -8,3 +8,4 @@ c_generated_code/
 *.json.bak
 results/**/raw_video/
 results/**/sim.log
+results/sim_*/**/run.csv
