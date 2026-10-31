@@ -23,7 +23,7 @@ def make_nodes(context):
     share = get_package_share_directory("tb_nmpc")
     rewrites = dict(ROBOTS[get("robot_model")])
     if get("max_speed"):
-        v = float(get("max_speed"))
+        v = min(float(get("max_speed")), {"burger": 0.20, "tb4": 0.28}[get("robot_model")])
         rewrites.update(vx_max=str(v), desired_linear_vel=str(0.9 * v))
     rewrites["use_sim_time"] = get("use_sim_time")
     rewrites["enable_stamped_cmd_vel"] = "true" if get("cmd_vel_type") == "stamped" else "false"
@@ -49,8 +49,8 @@ def generate_launch_description():
         ("controller", "mppi", "mppi or rpp"),
         ("robot_model", "burger", "burger or tb4"),
         ("use_sim_time", "false", ""),
-        ("max_speed", "", "speed cap [m/s]"),
-        ("path_size", "1.5", ""),
+        ("max_speed", "0.12", "speed cap [m/s]; empty = the robot's cap in ROBOTS"),
+        ("path_size", "1.0", "half-width a of the figure eight [m]"),
         ("laps", "1.0", ""),
         ("cmd_vel_topic", "/cmd_vel", ""),
         ("cmd_vel_type", "stamped", "twist or stamped (what the base subscribes to)"),

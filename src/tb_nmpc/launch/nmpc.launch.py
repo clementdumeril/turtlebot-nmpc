@@ -1,6 +1,7 @@
 """NMPC node on a real or simulated TurtleBot.
 
     ros2 launch tb_nmpc nmpc.launch.py robot_model:=burger max_speed:=0.12 path_size:=0.8
+Defaults are deliberately slow and small for a first real run (0.12 m/s, 2 m x 1 m).
     ros2 launch tb_nmpc nmpc.launch.py robot_model:=tb4 predict:=false use_sim_time:=false
 Then:  ros2 service call /tb_nmpc/start std_srvs/srv/Trigger
 """
@@ -11,6 +12,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+HARDWARE_MAX = {"burger": 0.22, "tb4": 0.30}  # [m/s] max_speed is clamped below these
 
 
 def make_nodes(context):
@@ -29,7 +32,7 @@ def make_nodes(context):
         "latency": float(get("latency")),
     }
     if get("max_speed"):
-        v = float(get("max_speed"))
+        v = min(float(get("max_speed")), HARDWARE_MAX[get("robot_model")] - 0.02)
         overrides.update(v_max=v, v_ref=0.9 * v)
     return [Node(package="tb_nmpc", executable="nmpc_node", name="tb_nmpc", output="screen",
                  parameters=[os.path.join(share, "config", get("robot_model") + ".yaml"), overrides])]
@@ -40,8 +43,8 @@ def generate_launch_description():
         ("robot_model", "burger", "burger or tb4"),
         ("use_sim_time", "false", ""),
         ("predict", "true", "false = obstacles frozen at their current position"),
-        ("max_speed", "", "speed cap [m/s]; empty = the robot file's v_max"),
-        ("path_size", "1.5", "half-width of the figure eight [m] (the figure is 2a x a)"),
+        ("max_speed", "0.12", "speed cap [m/s], below the robot file's v_max; empty = v_max"),
+        ("path_size", "1.0", "half-width a of the figure eight [m]; it covers 2a x a, see the checklist"),
         ("laps", "1.0", ""),
         ("cmd_vel_topic", "/cmd_vel", ""),
         ("cmd_vel_type", "auto", "auto, twist or stamped"),

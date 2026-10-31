@@ -1,4 +1,4 @@
-# Real TurtleBot: Saturday checklist
+# Real TurtleBot: checklist
 
 Goal of the session: the same figure eight and the same crossing on the real robot, NMPC vs. Nav2 MPPI (and RPP), logged the same way as in simulation. Everything below runs without sudo.
 
@@ -38,10 +38,12 @@ Write down: distro, model, cmd_vel type, scan rate, lidar frame and yaw.
 
 ## 2. Safety
 
-- First runs with `max_speed:=0.10` and `path_size:=0.8` (a 1.6 m x 0.8 m figure eight), then 0.15, then the full 0.20 (Burger) / 0.25 (TB4).
-- Clear 3 m x 2 m, nobody inside except the "pedestrian".
-- One person on the keyboard with this ready: `ros2 service call /tb_nmpc/stop std_srvs/srv/Trigger` (or `/nav2_follow/stop`). Ctrl-C on the node also sends a zero command.
-- Check once, wheels in the air: kill the node while it drives. Does the base stop by itself? (TurtleBot4's Create 3 has a command timeout; I have not checked the TurtleBot3 firmware.) If it does not, keep a hand near the power switch.
+- The real-robot launch files default to `max_speed:=0.12` and `path_size:=1.0`; `max_speed` is clamped below the hardware limit (Burger 0.22 m/s, TB4 0.30 m/s), and the NMPC never reverses. Go to 0.15, then 0.20 (Burger) / 0.25 (TB4), only after a clean lap.
+- Where the figure eight goes: it starts at the robot, heading straight ahead, and lies behind it and to its right. With half-width a = `path_size`, it spans from 1.71·a behind the robot to 0.29·a ahead, and from 0 to a to its right. For a = 1.0: 2.0 m x 1.0 m, so clear 2.6 m x 1.6 m (30 cm margin) and put the robot at the front-left corner of that area, facing forward. For a = 0.8: 1.6 m x 0.8 m.
+- Nobody inside the area except the "pedestrian".
+- One person on the keyboard with this ready: `ros2 service call /tb_nmpc/stop std_srvs/srv/Trigger` (or `/nav2_follow/stop`). Ctrl-C on the NMPC node sends five zero commands before it exits.
+- The NMPC sends zero if odometry is older than 0.5 s or the lidar older than 1 s (dropped wifi, dead driver), and stops for good if a control step throws.
+- If the controller process is killed hard (`kill -9`, laptop off), nothing can send a zero. Check once, wheels in the air: start a run, kill the node with `kill -9`, see whether the base stops by itself. The TurtleBot4's Create 3 base should stop when commands stop arriving; I have not checked either base myself. If the Burger keeps rolling, keep a hand near its power switch for every run.
 - The NMPC has a safety stop (lidar return within 3 cm of the body, ahead). Do not rely on it at speed.
 
 ## 3. Identify the base (5 min)
@@ -54,25 +56,27 @@ It prints the command-to-odometry delay and time constant. If the NMPC oscillate
 
 ## 4. Runs
 
-Lay out: start mark (robot at the origin, facing +x, i.e. along the top of the right lobe), the crossing line on the first diagonal (s = 2.9 m for `path_size:=1.5`; scale with the size), and a trigger mark on the floor where the walker starts walking when the robot passes it.
+Lay out (see section 2 for where the figure goes): the start mark, the crossing line on the first diagonal (for `path_size:=1.0`: about 0.5 m behind and 0.65 m to the right of the start), and a trigger mark on the floor where the walker starts walking when the robot passes it.
 
 Terminal A (controller), terminal B (recorder), terminal C (bag):
 
 ```bash
 # A: one of
-ros2 launch tb_nmpc nmpc.launch.py robot_model:=burger max_speed:=0.15 path_size:=1.0
-ros2 launch tb_nmpc nmpc.launch.py robot_model:=burger max_speed:=0.15 path_size:=1.0 predict:=false
-ros2 launch tb_nmpc nav2_controller.launch.py controller:=mppi robot_model:=burger max_speed:=0.15 path_size:=1.0 cmd_vel_type:=twist
-ros2 launch tb_nmpc nav2_controller.launch.py controller:=rpp  robot_model:=burger max_speed:=0.15 path_size:=1.0 cmd_vel_type:=twist
+ros2 launch tb_nmpc nmpc.launch.py robot_model:=burger max_speed:=0.12 path_size:=1.0
+ros2 launch tb_nmpc nmpc.launch.py robot_model:=burger max_speed:=0.12 path_size:=1.0 predict:=false
+ros2 launch tb_nmpc nav2_controller.launch.py controller:=mppi robot_model:=burger max_speed:=0.12 path_size:=1.0 cmd_vel_type:=twist
+ros2 launch tb_nmpc nav2_controller.launch.py controller:=rpp  robot_model:=burger max_speed:=0.12 path_size:=1.0 cmd_vel_type:=twist
 # C:
 ros2 bag record -o bags/<name> /scan /odom /cmd_vel /tf /tf_static /tb_nmpc/stats /tb_nmpc/tracks /nav2_follow/stats
 # B: starts the lap and logs it like the simulation (no ground truth on the real robot)
 python3 scripts/benchmark.py --real --controller nmpc --cmd-type twist --out results/real_2026-10-31/<name>
+# afterwards
+python3 scripts/metrics_real.py results/real_2026-10-31 --path-size 1.0
 ```
 
 | # | Scenario | Controllers | Repeats |
 |---|---|---|---|
-| 1 | clear, 0.10 m/s, small figure | nmpc | 1 (shake-down) |
+| 1 | clear, 0.12 m/s, `path_size:=0.8` | nmpc | 1 (shake-down) |
 | 2 | clear | nmpc, mppi, rpp | 3 each |
 | 3 | box on the path | nmpc, mppi, rpp | 3 each |
 | 4 | person crossing at a steady walk, same trigger mark | nmpc, nmpc no prediction, mppi | 3 each |

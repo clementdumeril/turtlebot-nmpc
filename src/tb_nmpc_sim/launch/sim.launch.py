@@ -43,7 +43,7 @@ def controller_nodes(context):
         return [IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(nmpc_share, "launch", "nav2_controller.launch.py")),
             launch_arguments={"controller": controller, "robot_model": "burger", "use_sim_time": "true",
-                              "cmd_vel_type": "stamped"}.items())]
+                              "cmd_vel_type": "stamped", "max_speed": "", "path_size": "1.5"}.items())]
     return []
 
 

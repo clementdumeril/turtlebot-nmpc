@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import os
+import signal
 import time
 from collections import deque
 
@@ -20,6 +21,7 @@ import rclpy
 from geometry_msgs.msg import PoseStamped, Twist, TwistStamped
 from nav_msgs.msg import Odometry, Path as PathMsg
 from rclpy.duration import Duration
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from rclpy.time import Time
@@ -72,6 +74,8 @@ class NmpcNode(Node):
         P("laser_y", 0.0)
         P("laser_yaw", 0.0)
         P("leg_merge_dist", 0.35)
+        P("odom_timeout", 0.5)             # [s] zero command if odometry is older than this
+        P("scan_timeout", 1.0)             # [s] zero command if the lidar is older than this
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         self.g = g
 
@@ -114,6 +118,13 @@ class NmpcNode(Node):
         self.create_service(Trigger, "~/stop", self.on_stop)
         self.create_timer(cfg.dt, self.step)
         self.odom_frame = "odom"
+        # Local receive times (watchdog) and the last scan stamp (robot clock): predictions are
+        # timed from these, so an offset between the robot's clock and this computer's does not
+        # shift the predicted obstacles.
+        self.odom_rx = None
+        self.scan_rx = None
+        self.scan_stamp = None
+        self._stale = False
         if g("autostart"):
             self.create_timer(1.0, self._autostart_once)
 
@@ -124,6 +135,7 @@ class NmpcNode(Node):
         t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
         self.odom_hist.append((t, p.position.x, p.position.y, yaw_of(p.orientation),
                                msg.twist.twist.linear.x, msg.twist.twist.angular.z))
+        self.odom_rx = self.local_now()
 
     def pose_at(self, t: float):
         """Odometry pose interpolated at time t (yaw interpolated on the short arc)."""
@@ -164,6 +176,8 @@ class NmpcNode(Node):
         small, static = detect(msg.ranges, msg.angle_min, msg.angle_increment, sensor, self.perc)
         self.tracker.update(t, small)
         self.static = static
+        self.scan_rx = self.local_now()
+        self.scan_stamp = t
         r = np.asarray(msg.ranges, dtype=float)
         a = msg.angle_min + msg.angle_increment * np.arange(len(r)) + sensor[2]
         ok = np.isfinite(r) & (r > self.perc.range_min) & (r < 1.0)
@@ -240,9 +254,11 @@ class NmpcNode(Node):
         N, M, dt = self.cfg.N, self.cfg.M, self.cfg.dt
         inflate = self.g("robot_radius") + self.g("safety_margin")
         times = dt * np.arange(N + 1)
+        # Now, on the robot's clock (the one the scan stamps and the tracks use).
+        t_robot = self.scan_stamp + (now - self.scan_rx) if self.scan_stamp is not None else now
         cands = []
         for tr in self.tracker.tracks:
-            cands.append(self.tracker.predict(tr, (now - tr.t) + times, use_velocity=self.g("predict")))
+            cands.append(self.tracker.predict(tr, (t_robot - tr.t) + times, use_velocity=self.g("predict")))
         for c in self.static:
             cands.append(np.tile(c, (N + 1, 1)))
         obs = np.tile([FAR, FAR, 0.0], (N + 1, M, 1))
@@ -259,10 +275,33 @@ class NmpcNode(Node):
             obs[:, j, 2] = cands[i][:, 2] + inflate
         return obs
 
+    def local_now(self) -> float:
+        return self.get_clock().now().nanoseconds * 1e-9
+
     def step(self):
         if not self.running or not self.odom_hist:
             return
-        now = self.get_clock().now().nanoseconds * 1e-9
+        now = self.local_now()
+        # Watchdog: stale odometry or lidar (dropped link, dead driver) -> stand still.
+        stale = (self.odom_rx is None or now - self.odom_rx > self.g("odom_timeout")
+                 or self.scan_rx is None or now - self.scan_rx > self.g("scan_timeout"))
+        if stale:
+            if not self._stale:
+                self.get_logger().warn("odometry or lidar stale: zero command until both are back")
+            self._stale = True
+            self.v_state = self.w_state = 0.0
+            self.mpc.reset()
+            self.publish_cmd(0.0, 0.0)
+            return
+        self._stale = False
+        try:
+            self.control(now)
+        except Exception as e:  # noqa: BLE001
+            self.running = False
+            self.publish_cmd(0.0, 0.0)
+            self.get_logger().error(f"control step failed, stopped: {e!r}")
+
+    def control(self, now: float):
         t_odom, x, y, yaw, v_odom, w_odom = self.odom_hist[-1]
         if self.g("velocity_state") == "odom":
             v0, w0 = v_odom, w_odom
@@ -352,17 +391,30 @@ class NmpcNode(Node):
 
 
 def main():
-    rclpy.init()
+    # Keep the ROS context alive on Ctrl-C so the zero command below still goes out (with
+    # rclpy's own handler the context is already shut down and the publish is lost).
+    try:
+        from rclpy.signals import SignalHandlerOptions
+        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    except (ImportError, TypeError):
+        rclpy.init()
     node = NmpcNode()
+
+    def on_term(*_):  # ros2 launch escalates to SIGTERM 5 s after Ctrl-C
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, on_term)
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        try:
-            node.publish_cmd(0.0, 0.0)
-        except Exception:  # noqa: BLE001
-            pass
+        for _ in range(5):
+            try:
+                node.publish_cmd(0.0, 0.0)
+            except Exception:  # noqa: BLE001
+                break
+            time.sleep(0.02)
         node.destroy_node()
         rclpy.try_shutdown()
 
