@@ -15,6 +15,8 @@
 
 ## Results
 
+Update, 31 October: 5 more NMPC runs of the 0.5 m/s crossing (and one more MPPI run) are in [sim_2026-10-31_crossing_repeats](../sim_2026-10-31_crossing_repeats). Over 7 comparable runs the NMPC with prediction made contact once (-2.2 cm); the 0/2 below was a small sample.
+
 From [summary.md](summary.md). Tracking error is measured over the whole lap, detours included, in the odometry frame (what the controller sees). Clearance is edge to edge with the true geometry; negative means contact.
 
 | Scenario | Controller | Contact (runs) | Worst clearance [cm] | Tracking RMSE, odom [cm] | Lap [s] |

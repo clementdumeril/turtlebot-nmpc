@@ -1,6 +1,6 @@
 # TurtleBot NMPC with lidar obstacle prediction, against Nav2 MPPI
 
-An acados NMPC for a TurtleBot3 that tracks moving obstacles with the 2D lidar and plans around where they will be over the next 3 s. In Webots it was the only one of four controllers that never touched a person crossing its path at 0.5 m/s (2 of 2 runs, 11 cm closest), with a 0.85 ms median solve. Nav2's MPPI made contact in both runs. Real-robot runs are planned for 31 October 2026.
+An acados NMPC for a TurtleBot3 that tracks moving obstacles with the 2D lidar and plans around where they will be over the next 3 s. In Webots it avoided a person crossing its path at 0.5 m/s in 6 of 7 runs (median 12 cm closest, worst -2.2 cm), while Nav2's MPPI made contact in all 3 of its runs; median solve 0.85 ms. Real-robot runs are planned for 31 October 2026.
 
 ![Top view drawn from the logged Webots ground truth, person crossing at 0.5 m/s: the NMPC slows and passes behind them, Nav2 MPPI keeps going and is hit](docs/figures/crossing_nmpc_vs_mppi.gif)
 
@@ -14,11 +14,11 @@ A personal project started on 30 October 2026, while I have access to the EECS C
 
 ## Results
 
-Simulation only: Webots, TurtleBot3 Burger, lidar at 5 Hz, two runs per case, same speed caps (0.20 m/s, 2.0 rad/s) for every controller. Contact is counted from the Webots ground truth; clearance is edge to edge, negative means contact. From [results/sim_2026-10-30](results/sim_2026-10-30) ([summary](results/sim_2026-10-30/summary.md), [notes](results/sim_2026-10-30/README.md)).
+Simulation only: Webots, TurtleBot3 Burger, lidar at 5 Hz, two runs per case, same speed caps (0.20 m/s, 2.0 rad/s) for every controller. Contact is counted from the Webots ground truth; clearance is edge to edge, negative means contact. From [results/sim_2026-10-30](results/sim_2026-10-30) ([summary](results/sim_2026-10-30/summary.md), [notes](results/sim_2026-10-30/README.md)). The 0.5 m/s crossing has more runs for the NMPC and MPPI: the recorded run below and the [31 October repeats](results/sim_2026-10-31_crossing_repeats).
 
 | | NMPC + prediction | NMPC, no prediction | Nav2 MPPI | Nav2 RPP |
 |---|---|---|---|---|
-| Person crossing at 0.5 m/s: contact, closest | **0/2, +11.0 cm** | 2/2, -9.2 cm | 2/2, -21.8 cm | 2/2, -7.3 cm |
+| Person crossing at 0.5 m/s: contact, worst clearance | **1/7, -2.2 cm** (median +12.2) | 2/2, -9.2 cm | 3/3, -21.8 cm | 2/2, -7.3 cm |
 | Person crossing at 1.0 m/s | 2/2, -8.5 cm | 2/2, -20.5 cm | 2/2, -25.0 cm | 2/2, -15.7 cm |
 | Two static obstacles near the path | 0/2, +4.0 cm | 0/2, +4.7 cm | 1/2, -7.1 cm | 2/2, -7.0 cm |
 | Clear lap: tracking RMSE (odometry frame), lap time | 0.2 cm, 53.0 s | 0.2 cm, 52.9 s | 8.6 cm, 45.7 s | 2.1 cm, 64.3 s |
@@ -31,7 +31,7 @@ Simulation only: Webots, TurtleBot3 Burger, lidar at 5 Hz, two runs per case, sa
 
 The Webots view above is a third NMPC run, recorded separately and not in the table ([log](results/sim_2026-10-30_video/crossing_nmpc_recorded)): 24 cm closest.
 
-At 0.5 m/s the predictive NMPC slows down and passes behind the person. Without prediction, the same NMPC sees them standing where they were and is hit from the side, as are MPPI and RPP, which react to the current costmap only. At 1.0 m/s every controller is hit: the tracker needs three 5 Hz scans to trust a velocity, which leaves about one second at 0.2 m/s. Prediction cuts the depth of contact from 20.5 to 8.5 cm there but does not avoid it.
+At 0.5 m/s the predictive NMPC slows down and passes behind the person in 6 of 7 runs; in the seventh it slowed too close to their line and was brushed (-2.2 cm). Without prediction, the same NMPC sees them standing where they were and is hit from the side, as are MPPI and RPP, which react to the current costmap only. At 1.0 m/s every controller is hit: the tracker needs three 5 Hz scans to trust a velocity, which leaves about one second at 0.2 m/s. Prediction cuts the depth of contact from 20.5 to 8.5 cm there but does not avoid it.
 
 NMPC solve time over the 16 NMPC runs: 0.79 to 0.91 ms median per run, worst 11.7 ms, on a 2016 laptop CPU (i7-6700HQ) against a 100 ms period. The whole Python control step around it takes 3.4 ms median.
 
@@ -79,10 +79,11 @@ Things that changed the numbers while I built it:
 - With the cylinder exactly on the path at a lobe tip, both my NMPC and MPPI stopped in front of it for good: the whole reference sat inside the inflated obstacle. I added the reference skip to the NMPC, and moved the cylinder 18 cm off the path so the test is about local avoidance, which is what both controllers do without a global planner.
 - In two of my first starts, ros2_control read the placeholder robot description before the Webots driver replaced it, and the wheels never came up. The placeholder now carries the ros2_control block.
 - The box was first scored as its circumscribed circle, which counts contacts that are not there. Clearance now uses the true box.
+- When I made the prediction robust to an offset between the robot's clock and the computer's, my first version dropped the scan's transport delay: the predicted person lagged the real one and contact at 0.5 m/s went to 3 of 5 runs. The offset is now the minimum of (receive time - stamp) over 10 s ([details](results/sim_2026-10-31_crossing_repeats)).
 
 ## Limitations
 
-- Simulation only until the real-robot runs. Two runs per case, one arena, one path.
+- Simulation only until the real-robot runs. Two runs per case (seven for the NMPC at 0.5 m/s), one arena, one path: the contact rates are rough.
 - The simulated person is a 0.15 m cylinder walking straight at constant speed, who does not yield. A real person's legs show up as two small clusters that swap places, merged here when closer than 0.35 m.
 - At 1.0 m/s nobody avoids the person, including the NMPC: 5 Hz lidar, three scans to confirm a track, 0.2 m/s top speed.
 - Nav2 runs without a planner or velocity smoother, fed the path by my node. A full Nav2 stack, or MPPI tuned for this robot, could do better than the defaults used here.

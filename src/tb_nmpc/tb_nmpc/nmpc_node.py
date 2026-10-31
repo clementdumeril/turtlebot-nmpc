@@ -118,12 +118,13 @@ class NmpcNode(Node):
         self.create_service(Trigger, "~/stop", self.on_stop)
         self.create_timer(cfg.dt, self.step)
         self.odom_frame = "odom"
-        # Local receive times (watchdog) and the last scan stamp (robot clock): predictions are
-        # timed from these, so an offset between the robot's clock and this computer's does not
-        # shift the predicted obstacles.
+        # Local receive times (watchdog), and the offset between this computer's clock and the
+        # robot's (scan stamps, which the tracks use): the minimum of (receive time - stamp) over
+        # the last 10 s, i.e. the clock offset plus the smallest transport delay. With synced
+        # clocks (simulation) it is ~0 and the prediction is timed exactly as with stamps alone.
         self.odom_rx = None
         self.scan_rx = None
-        self.scan_stamp = None
+        self.clock_offsets: deque = deque(maxlen=50)
         self._stale = False
         if g("autostart"):
             self.create_timer(1.0, self._autostart_once)
@@ -177,7 +178,7 @@ class NmpcNode(Node):
         self.tracker.update(t, small)
         self.static = static
         self.scan_rx = self.local_now()
-        self.scan_stamp = t
+        self.clock_offsets.append(self.scan_rx - t)
         r = np.asarray(msg.ranges, dtype=float)
         a = msg.angle_min + msg.angle_increment * np.arange(len(r)) + sensor[2]
         ok = np.isfinite(r) & (r > self.perc.range_min) & (r < 1.0)
@@ -255,7 +256,7 @@ class NmpcNode(Node):
         inflate = self.g("robot_radius") + self.g("safety_margin")
         times = dt * np.arange(N + 1)
         # Now, on the robot's clock (the one the scan stamps and the tracks use).
-        t_robot = self.scan_stamp + (now - self.scan_rx) if self.scan_stamp is not None else now
+        t_robot = now - min(self.clock_offsets) if self.clock_offsets else now
         cands = []
         for tr in self.tracker.tracks:
             cands.append(self.tracker.predict(tr, (t_robot - tr.t) + times, use_velocity=self.g("predict")))
