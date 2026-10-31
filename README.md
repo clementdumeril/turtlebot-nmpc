@@ -79,7 +79,7 @@ Things that changed the numbers while I built it:
 - With the cylinder exactly on the path at a lobe tip, both my NMPC and MPPI stopped in front of it for good: the whole reference sat inside the inflated obstacle. I added the reference skip to the NMPC, and moved the cylinder 18 cm off the path so the test is about local avoidance, which is what both controllers do without a global planner.
 - In two of my first starts, ros2_control read the placeholder robot description before the Webots driver replaced it, and the wheels never came up. The placeholder now carries the ros2_control block.
 - The box was first scored as its circumscribed circle, which counts contacts that are not there. Clearance now uses the true box.
-- When I made the prediction robust to an offset between the robot's clock and the computer's, my first version dropped the scan's transport delay: the predicted person lagged the real one and contact at 0.5 m/s went to 3 of 5 runs. The offset is now the minimum of (receive time - stamp) over 10 s ([details](results/sim_2026-10-31_crossing_repeats)).
+- When I made the prediction robust to an offset between the robot's clock and the computer's, my first version dropped the scan's transport delay (the predicted person probably lagged the real one) and contact at 0.5 m/s went to 3 of 5 runs. The offset is now the minimum of (receive time - stamp) over 10 s ([details](results/sim_2026-10-31_crossing_repeats)).
 
 ## Limitations
 
