@@ -1,6 +1,6 @@
 import numpy as np
 
-from tb_nmpc.reference import Path, anchored, lemniscate
+from tb_nmpc.reference import Path, anchored, circle, lemniscate
 
 
 def test_starts_at_origin_heading_x():
@@ -39,3 +39,12 @@ def test_skip_blocked_moves_reference_past_an_obstacle():
     pts = np.stack(p.sample(s2)[:2], 1)[1:]
     assert np.all(np.hypot(pts[:, 0] - x, pts[:, 1] - y) >= 0.3 - 1e-9)
     assert np.all(np.diff(s2) >= 0) and s2[0] == s[0]
+
+
+def test_circle_starts_forward_and_turns_left():
+    p = Path(circle(0.5))
+    assert np.allclose(p.xy[0], 0.0) and abs(p.theta[0]) < 5e-3
+    assert abs(p.length - 2 * np.pi * 0.5) < 1e-3
+    assert np.all(p.xy[:, 1] >= -1e-9) and abs(p.kappa[len(p.kappa) // 2] - 2.0) < 0.05
+    q = anchored(0.5, 1.0, (0.0, 0.0, 0.0), "circle")
+    assert abs(q.length - p.length) < 1e-9

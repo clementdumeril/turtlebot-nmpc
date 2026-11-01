@@ -40,6 +40,7 @@ def make_nodes(context):
              output="screen", parameters=[{"use_sim_time": sim, "autostart": True, "node_names": ["controller_server"]}]),
         Node(package="tb_nmpc", executable="nav2_follow", output="screen",
              parameters=[{"use_sim_time": sim, "path_size": float(get("path_size")), "laps": float(get("laps")),
+                          "path_shape": get("path_shape"),
                           "odom_topic": get("odom_topic")}]),
     ]
 
@@ -50,7 +51,8 @@ def generate_launch_description():
         ("robot_model", "burger", "burger or tb4"),
         ("use_sim_time", "false", ""),
         ("max_speed", "0.12", "speed cap [m/s]; empty = the robot's cap in ROBOTS"),
-        ("path_size", "1.0", "half-width a of the figure eight [m]"),
+        ("path_size", "1.0", "half-width a of the figure eight, or circle radius [m]"),
+        ("path_shape", "eight", "eight or circle"),
         ("laps", "1.0", ""),
         ("cmd_vel_topic", "/cmd_vel", ""),
         ("cmd_vel_type", "stamped", "twist or stamped (what the base subscribes to)"),

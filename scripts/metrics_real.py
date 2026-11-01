@@ -1,7 +1,7 @@
 """Metrics of real-robot runs (benchmark.py --real): no ground truth, so everything comes from
 odometry, the commands and the lidar.
 
-    python3 scripts/metrics_real.py results/real_2026-10-31 [--path-size 1.0]
+    python3 scripts/metrics_real.py results/real_2026-11-01 [--path-size 0.5] [--path-shape circle]
 
 - tracking error: odometry pose against the figure eight anchored where the run started;
 - lidar clearance: smallest lidar range during the lap minus the lidar-to-edge distance
@@ -24,11 +24,12 @@ from metrics import LABEL, episodes, fmt, load  # noqa: E402
 from tb_nmpc.reference import anchored  # noqa: E402
 
 
-def run_metrics(run_dir: Path, path_size: float, edge: float) -> dict:
+def run_metrics(run_dir: Path, path_size: float, edge: float, shape: str = "eight") -> dict:
     d, meta = load(run_dir)
     t = d["t"] - d["t"][0]
     oxy = np.stack([d["odom_x"], d["odom_y"]], axis=1)
-    path = anchored(path_size, 1.0, (d["odom_x"][0], d["odom_y"][0], d["odom_yaw"][0]))
+    laps = float(meta.get("laps", 1.0))
+    path = anchored(path_size, laps, (d["odom_x"][0], d["odom_y"][0], d["odom_yaw"][0]), shape)
     cte = path.distance(oxy)
     stops = episodes((t > 2.0) & (np.abs(d["odom_v"]) < 0.02), t, 0.5) - (1 if meta["completed"] else 0)
     ct, cw = d["cmd_t"], d["cmd_w"]
@@ -55,9 +56,10 @@ def main():
     ap.add_argument("root")
     ap.add_argument("--path-size", type=float, default=1.0)
     ap.add_argument("--edge", type=float, default=0.075)
+    ap.add_argument("--path-shape", default="eight", choices=["eight", "circle"])
     args = ap.parse_args()
     root = Path(args.root)
-    out = [run_metrics(r.parent, args.path_size, args.edge) for r in sorted(root.glob("*/meta.json"))]
+    out = [run_metrics(r.parent, args.path_size, args.edge, args.path_shape) for r in sorted(root.glob("*/meta.json"))]
     if not out:
         raise SystemExit("no runs")
     with open(root / "summary_real.csv", "w", newline="") as f:

@@ -51,7 +51,8 @@ class NmpcNode(Node):
         P("odom_topic", "/odom")
         P("scan_topic", "/scan")
         P("base_frame", "base_link")
-        P("path_size", 1.5)                # [m] half-width a of the figure eight
+        P("path_shape", "eight")           # eight | circle
+        P("path_size", 1.5)                # [m] half-width a of the figure eight, or circle radius
         P("laps", 1.0)
         P("v_ref", 0.18)
         P("v_max", 0.20)
@@ -74,6 +75,8 @@ class NmpcNode(Node):
         P("laser_y", 0.0)
         P("laser_yaw", 0.0)
         P("leg_merge_dist", 0.35)
+        P("track_v_static", 0.10)          # [m/s] tracks slower than this are predicted static
+        P("track_min_hits", 3)             # detections before a track's velocity is used
         P("odom_timeout", 0.5)             # [s] zero command if odometry is older than this
         P("scan_timeout", 1.0)             # [s] zero command if the lidar is older than this
         g = lambda n: self.get_parameter(n).value  # noqa: E731
@@ -87,7 +90,7 @@ class NmpcNode(Node):
         self.get_logger().info(f"acados solver ready in {time.time() - t0:.1f} s (N={cfg.N}, dt={cfg.dt}, M={cfg.M})")
         self.cfg = cfg
         self.perc = PerceptionParams(merge_dist=g("leg_merge_dist"))
-        self.tracker = Tracker(TrackerParams())
+        self.tracker = Tracker(TrackerParams(v_static=g("track_v_static"), min_hits=g("track_min_hits")))
         self.static = np.zeros((0, 3))
         self.static_inflated = np.zeros((0, 3))
         self.scan_xy = np.zeros((0, 2))
@@ -201,7 +204,7 @@ class NmpcNode(Node):
             return resp
         self.setup_cmd_pub()
         pose = self.odom_hist[-1][1:4]
-        self.path = anchored(self.g("path_size"), self.g("laps"), pose)
+        self.path = anchored(self.g("path_size"), self.g("laps"), pose, self.g("path_shape"))
         self.s = 0.0
         self.v_state = self.w_state = 0.0
         self.mpc.reset()
@@ -210,7 +213,7 @@ class NmpcNode(Node):
         self.started_at = self.local_now()
         self.done_pub.publish(Bool(data=False))
         self.publish_path(self.ref_pub, self.path.xy[::20])
-        resp.success, resp.message = True, f"following a {self.path.length:.2f} m figure eight"
+        resp.success, resp.message = True, f"following a {self.path.length:.2f} m {self.g('path_shape')}"
         self.get_logger().info(resp.message)
         return resp
 

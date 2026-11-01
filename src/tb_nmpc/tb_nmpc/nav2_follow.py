@@ -30,7 +30,7 @@ from .reference import anchored
 class Nav2Follow(Node):
     def __init__(self):
         super().__init__("nav2_follow")
-        for name, default in (("odom_topic", "/odom"), ("path_size", 1.5), ("laps", 1.0), ("window_min", 2.5), ("window_max", 4.0),
+        for name, default in (("odom_topic", "/odom"), ("path_size", 1.5), ("path_shape", "eight"), ("laps", 1.0), ("window_min", 2.5), ("window_max", 4.0),
                               ("rate", 2.0), ("controller_id", "FollowPath"), ("goal_checker_id", "general_goal_checker"),
                               ("autostart", False)):
             self.declare_parameter(name, default)
@@ -63,7 +63,7 @@ class Nav2Follow(Node):
         if self.pose is None or not self.client.wait_for_server(timeout_sec=5.0):
             resp.success, resp.message = False, "no odometry or no follow_path action server"
             return resp
-        self.path = anchored(self.g("path_size"), self.g("laps"), self.pose)
+        self.path = anchored(self.g("path_size"), self.g("laps"), self.pose, self.g("path_shape"))
         self.s = 0.0
         self.final_sent = False
         self.running = True

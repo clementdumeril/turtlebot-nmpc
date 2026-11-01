@@ -1,8 +1,9 @@
-"""Reference path for both controllers: a figure eight, and arc-length progress along it.
+"""Reference path for both controllers: a figure eight or a circle, and arc-length progress along it.
 
 The figure eight is a lemniscate of Gerono, x = a sin t, y = a sin t cos t, started at the top
 of its right lobe (t = pi/4) where the tangent is +x, and shifted so that the start is the
-origin. A robot that starts at its odometry origin facing +x is then on the path.
+origin. The circle starts at the origin heading +x and turns left (centre at (0, r)). A robot
+that starts at its odometry origin facing +x is on either path.
 """
 from __future__ import annotations
 
@@ -15,6 +16,15 @@ def lemniscate(a: float, laps: float = 1.0, points_per_lap: int = 4000) -> np.nd
     t = t0 + np.linspace(0.0, 2 * np.pi * laps, max(2, int(points_per_lap * laps)) + 1)
     xy = np.stack([a * np.sin(t), a * np.sin(t) * np.cos(t)], axis=1)
     return xy - xy[0]
+
+
+def circle(r: float, laps: float = 1.0, points_per_lap: int = 2000) -> np.ndarray:
+    """Dense polyline (n, 2) of a circle of radius r [m], starting at the origin heading +x, turning left."""
+    phi = np.linspace(0.0, 2 * np.pi * laps, max(2, int(points_per_lap * laps)) + 1)
+    return np.stack([r * np.sin(phi), r * (1.0 - np.cos(phi))], axis=1)
+
+
+SHAPES = {"eight": lemniscate, "circle": circle}
 
 
 class Path:
@@ -114,8 +124,9 @@ class Path:
                 s[k] = min(s[k] + step, self.length)
         return s
 
-def anchored(a: float, laps: float, pose) -> Path:
-    """The figure eight expressed in the odometry frame, starting at pose = (x, y, yaw)."""
-    xy = lemniscate(a, laps)
+def anchored(a: float, laps: float, pose, shape: str = "eight") -> Path:
+    """The path (figure eight of half-width a, or circle of radius a) in the odometry frame,
+    starting at pose = (x, y, yaw)."""
+    xy = SHAPES[shape](a, laps)
     c, s = np.cos(pose[2]), np.sin(pose[2])
     return Path(xy @ np.array([[c, s], [-s, c]]) + np.asarray(pose[:2]))
