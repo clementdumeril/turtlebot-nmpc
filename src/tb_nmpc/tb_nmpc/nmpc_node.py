@@ -126,6 +126,7 @@ class NmpcNode(Node):
         self.scan_rx = None
         self.clock_offsets: deque = deque(maxlen=50)
         self._stale = False
+        self.started_at = 0.0
         if g("autostart"):
             self.create_timer(1.0, self._autostart_once)
 
@@ -206,6 +207,7 @@ class NmpcNode(Node):
         self.mpc.reset()
         self.mpc.set_limits(self.g("v_min"), self.g("v_max"), self.g("w_max"), self.g("a_max"), self.g("alpha_max"))
         self.running = True
+        self.started_at = self.local_now()
         self.done_pub.publish(Bool(data=False))
         self.publish_path(self.ref_pub, self.path.xy[::20])
         resp.success, resp.message = True, f"following a {self.path.length:.2f} m figure eight"
@@ -283,18 +285,20 @@ class NmpcNode(Node):
         if not self.running or not self.odom_hist:
             return
         now = self.local_now()
-        # Watchdog: stale odometry or lidar (dropped link, dead driver) -> stand still.
+        # Watchdog: stale odometry or lidar (dropped link, bring-up restarted) ends the run. It does
+        # not resume on its own: an earlier version did, and the robot drove off as soon as the
+        # bring-up was relaunched. A new ~/start is needed. The first second after start is a
+        # grace period for the first scan.
         stale = (self.odom_rx is None or now - self.odom_rx > self.g("odom_timeout")
                  or self.scan_rx is None or now - self.scan_rx > self.g("scan_timeout"))
         if stale:
-            if not self._stale:
-                self.get_logger().warn("odometry or lidar stale: zero command until both are back")
-            self._stale = True
             self.v_state = self.w_state = 0.0
-            self.mpc.reset()
             self.publish_cmd(0.0, 0.0)
+            if now - self.started_at > 1.0:
+                self.running = False
+                self.mpc.reset()
+                self.get_logger().warn("odometry or lidar lost: run stopped, call ~/start again")
             return
-        self._stale = False
         try:
             self.control(now)
         except Exception as e:  # noqa: BLE001

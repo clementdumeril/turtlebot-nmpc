@@ -42,7 +42,7 @@ Write down: distro, model, cmd_vel type, scan rate, lidar frame and yaw.
 - Where the figure eight goes: it starts at the robot, heading straight ahead, and lies behind it and to its right. With half-width a = `path_size`, it spans from 1.71·a behind the robot to 0.29·a ahead, and from 0 to a to its right. For a = 1.0: 2.0 m x 1.0 m, so clear 2.6 m x 1.6 m (30 cm margin) and put the robot at the front-left corner of that area, facing forward. For a = 0.8: 1.6 m x 0.8 m.
 - Nobody inside the area except the "pedestrian".
 - One person on the keyboard with this ready: `ros2 service call /tb_nmpc/stop std_srvs/srv/Trigger` (or `/nav2_follow/stop`). Ctrl-C on the NMPC node sends five zero commands before it exits.
-- The NMPC sends zero if odometry is older than 0.5 s or the lidar older than 1 s (dropped wifi, dead driver), and stops for good if a control step throws.
+- The NMPC sends zero and ends the run if odometry is older than 0.5 s or the lidar older than 1 s (dropped wifi, bring-up restarted), and also if a control step throws. It does not resume by itself: call `start` again.
 - If the controller process is killed hard (`kill -9`, laptop off), nothing can send a zero. Check once, wheels in the air: start a run, kill the node with `kill -9`, see whether the base stops by itself. The TurtleBot4's Create 3 base should stop when commands stop arriving; I have not checked either base myself. If the Burger keeps rolling, keep a hand near its power switch for every run.
 - The NMPC has a safety stop (lidar return within 3 cm of the body, ahead). Do not rely on it at speed.
 
