@@ -1,6 +1,7 @@
 # Source in every WSL terminal:  source scripts/env.sh
 # ROS 2, the optional user-space Nav2 (scripts/install_nav2_userspace.sh), acados, the workspace.
-source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash
+# Keep an environment that is already set up (the C106A lab .bashrc sources the TurtleBot3 workspace).
+[ -n "$AMENT_PREFIX_PATH" ] || source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash
 N2=$HOME/nav2_local/root
 if [ -d "$N2/opt/ros/jazzy" ] && [ ! -d /opt/ros/jazzy/share/nav2_mppi_controller ]; then
   export AMENT_PREFIX_PATH=$N2/opt/ros/jazzy:$AMENT_PREFIX_PATH
