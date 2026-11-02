@@ -130,3 +130,14 @@ def anchored(a: float, laps: float, pose, shape: str = "eight") -> Path:
     xy = SHAPES[shape](a, laps)
     c, s = np.cos(pose[2]), np.sin(pose[2])
     return Path(xy @ np.array([[c, s], [-s, c]]) + np.asarray(pose[:2]))
+
+
+def resample(xy, step: float = 0.02) -> np.ndarray:
+    """Polyline resampled every `step` metres (a received path can have sparse waypoints)."""
+    xy = np.asarray(xy, float)
+    seg = np.hypot(*np.diff(xy, axis=0).T)
+    s = np.r_[0.0, np.cumsum(seg)]
+    if s[-1] < 1e-6:
+        return np.vstack([xy[:1], xy[:1] + [1e-3, 0.0]])
+    q = np.r_[np.arange(0.0, s[-1], step), s[-1]]
+    return np.stack([np.interp(q, s, xy[:, 0]), np.interp(q, s, xy[:, 1])], 1)

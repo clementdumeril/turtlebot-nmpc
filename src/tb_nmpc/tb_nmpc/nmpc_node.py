@@ -33,7 +33,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from .ocp import FAR, Nmpc, OcpConfig
 from .perception import PerceptionParams, detect
-from .reference import Path, anchored
+from .reference import Path, anchored, resample
 from .tracker import Tracker, TrackerParams
 
 
@@ -51,6 +51,7 @@ class NmpcNode(Node):
         P("odom_topic", "/odom")
         P("scan_topic", "/scan")
         P("base_frame", "base_link")
+        P("path_source", "shape")          # shape: figure eight / circle on ~/start; topic: follow ~/path
         P("path_shape", "eight")           # eight | circle
         P("path_size", 1.5)                # [m] half-width a of the figure eight, or circle radius
         P("laps", 1.0)
@@ -118,6 +119,9 @@ class NmpcNode(Node):
         self.marker_pub = self.create_publisher(MarkerArray, "~/obstacles", 1)
         self.done_pub = self.create_publisher(Bool, "/follow/done", latched)
         self.create_service(Trigger, "~/start", self.on_start)
+        if g("path_source") == "topic":
+            # Paths from a planner (the explorer), in any frame TF can map to odom.
+            self.create_subscription(PathMsg, "~/path", self.on_path, 10)
         self.create_service(Trigger, "~/stop", self.on_stop)
         self.create_timer(cfg.dt, self.step)
         self.odom_frame = "odom"
@@ -216,6 +220,37 @@ class NmpcNode(Node):
         resp.success, resp.message = True, f"following a {self.path.length:.2f} m {self.g('path_shape')}"
         self.get_logger().info(resp.message)
         return resp
+
+    def on_path(self, msg: PathMsg):
+        """Follow a received path to its end; an empty path stops the robot."""
+        if not self.odom_hist:
+            self.get_logger().warn("path received before odometry, ignored")
+            return
+        if len(msg.poses) < 2:
+            self.running = False
+            self.publish_cmd(0.0, 0.0)
+            return
+        xy = np.array([[p.pose.position.x, p.pose.position.y] for p in msg.poses])
+        frame = msg.header.frame_id or self.odom_frame
+        if frame != self.odom_frame:
+            try:
+                tf = self.tf_buffer.lookup_transform(self.odom_frame, frame, Time(), Duration(seconds=0.0))
+            except Exception as e:  # noqa: BLE001
+                self.get_logger().error(f"no transform {self.odom_frame} <- {frame}: {e}")
+                return
+            tr = tf.transform
+            c, s_ = math.cos(yaw_of(tr.rotation)), math.sin(yaw_of(tr.rotation))
+            xy = xy @ np.array([[c, s_], [-s_, c]]) + np.array([tr.translation.x, tr.translation.y])
+        self.setup_cmd_pub()
+        self.path = Path(resample(xy))
+        self.s = 0.0
+        self.mpc.reset()
+        self.mpc.set_limits(self.g("v_min"), self.g("v_max"), self.g("w_max"), self.g("a_max"), self.g("alpha_max"))
+        self.running = True
+        self.started_at = self.local_now()
+        self.done_pub.publish(Bool(data=False))
+        self.publish_path(self.ref_pub, self.path.xy[::10])
+        self.get_logger().info(f"following a received {self.path.length:.2f} m path")
 
     def on_stop(self, _req, resp):
         self.running = False

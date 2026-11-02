@@ -10,7 +10,8 @@ A personal project started on 30 October 2026, while I have access to the EECS C
 
 - [x] NMPC, lidar tracking and prediction, ROS 2 node (Jazzy, also written for Humble)
 - [x] Webots benchmark against Nav2 MPPI and Regulated Pure Pursuit, 4 scenarios x 2 runs
-- [ ] Real TurtleBot, planned 31 October 2026 ([checklist](docs/REAL_ROBOT_CHECKLIST.md)). Every number below is from simulation.
+- [x] First real-robot laps, 1 November 2026: figure eight and circle on the lab TurtleBot3 (1.0 cm RMSE in the odometry frame on a 0.5 m circle, [runs](results/real_2026-11-01)). The obstacle runs need redoing (see the notes there). The numbers in Results are from simulation.
+- [ ] Autonomous exploration with photo capture for a 3D reconstruction ([docs/EXPLORATION.md](docs/EXPLORATION.md)): checked offline and in Webots, not yet on the robot.
 
 ## Results
 

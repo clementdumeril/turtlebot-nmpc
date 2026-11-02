@@ -1,0 +1,2 @@
+run,controller,completed,lap_time_s,cte_odom_rmse_cm,cte_odom_max_cm,lidar_clearance_cm,stops,ang_accel_rms,solve_med_ms,solve_max_ms
+clear_nmpc_1,nmpc,True,41.69949150085449,1.55298994298208,3.940512377592088,39.700000286102295,2,1.0683374105025187,1.2469999999999999,2.1310000000000002

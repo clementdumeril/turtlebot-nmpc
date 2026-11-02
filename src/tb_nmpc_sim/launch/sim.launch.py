@@ -1,6 +1,7 @@
 """Webots TurtleBot3 Burger on the figure eight, with one controller.
 
     ros2 launch tb_nmpc_sim sim.launch.py controller:=nmpc scenario:=crossing
+    ros2 launch tb_nmpc_sim sim.launch.py world:=room.wbt controller:=none scenario:=clear   # exploration
     controller: nmpc | nmpc_nopred | mppi | rpp | none
     scenario:   clear | static | crossing | crossing_fast | mixed
 Then start the run:  ros2 service call /tb_nmpc/start std_srvs/srv/Trigger   (or /nav2_follow/start)
@@ -16,7 +17,7 @@ from launch.actions import (DeclareLaunchArgument, EmitEvent, IncludeLaunchDescr
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from webots_ros2_driver.wait_for_controller_connection import WaitForControllerConnection
 from webots_ros2_driver.webots_controller import WebotsController
@@ -58,16 +59,8 @@ def generate_launch_description():
         os.environ["TB_SCENARIO"] = LaunchConfiguration("scenario").perform(context)
         return []
 
-    webots = WebotsLauncher(world=os.path.join(share, "worlds", "figure_eight.wbt"),
+    webots = WebotsLauncher(world=PathJoinSubstitution([share, "worlds", LaunchConfiguration("world")]),
                             mode=LaunchConfiguration("mode"), ros2_supervisor=True)
-    driver = WebotsController(
-        robot_name="TurtleBot3Burger",
-        parameters=[{"robot_description": os.path.join(share, "resource", "turtlebot.urdf"),
-                     "use_sim_time": True, "set_robot_state_publisher": True},
-                    os.path.join(share, "resource", "ros2control.yml")],
-        remappings=[("/diffdrive_controller/cmd_vel", "/cmd_vel"), ("/diffdrive_controller/odom", "/odom")],
-        respawn=True,
-    )
     # The driver replaces this description with the one generated from the Webots model. The
     # placeholder already carries the ros2_control block: controller_manager reads
     # /robot_description once, and if it got an empty placeholder first (a race I hit about one
@@ -81,11 +74,24 @@ def generate_launch_description():
                parameters=[{"robot_description": placeholder, "use_sim_time": True}])
     footprint = Node(package="tf2_ros", executable="static_transform_publisher", output="screen",
                      arguments=["0", "0", "0", "0", "0", "0", "base_link", "base_footprint"])
-    timeout = ["--controller-manager-timeout", "50"]
-    spawners = [Node(package="controller_manager", executable="spawner", output="screen",
-                     arguments=[name] + timeout,
-                     parameters=[{"use_sim_time": True}]) for name in ("diffdrive_controller", "joint_state_broadcaster")]
-    waiting = WaitForControllerConnection(target_driver=driver, nodes_to_start=spawners)
+
+    def robot_nodes(context):
+        # The room world has a camera on the robot: its URDF declares it.
+        world = LaunchConfiguration("world").perform(context)
+        urdf_file = "turtlebot_cam.urdf" if world == "room.wbt" else "turtlebot.urdf"
+        driver = WebotsController(
+            robot_name="TurtleBot3Burger",
+            parameters=[{"robot_description": os.path.join(share, "resource", urdf_file),
+                         "use_sim_time": True, "set_robot_state_publisher": True},
+                        os.path.join(share, "resource", "ros2control.yml")],
+            remappings=[("/diffdrive_controller/cmd_vel", "/cmd_vel"), ("/diffdrive_controller/odom", "/odom")],
+            respawn=True,
+        )
+        timeout = ["--controller-manager-timeout", "50"]
+        spawners = [Node(package="controller_manager", executable="spawner", output="screen",
+                         arguments=[name] + timeout,
+                         parameters=[{"use_sim_time": True}]) for name in ("diffdrive_controller", "joint_state_broadcaster")]
+        return [driver, WaitForControllerConnection(target_driver=driver, nodes_to_start=spawners)]
 
     return LaunchDescription([
         DeclareLaunchArgument("controller", default_value="nmpc",
@@ -93,13 +99,13 @@ def generate_launch_description():
         DeclareLaunchArgument("scenario", default_value="crossing",
                               choices=["clear", "static", "crossing", "crossing_fast", "mixed"]),
         DeclareLaunchArgument("mode", default_value="realtime"),
+        DeclareLaunchArgument("world", default_value="figure_eight.wbt", choices=["figure_eight.wbt", "room.wbt"]),
         OpaqueFunction(function=set_scenario),
         webots,
         webots._supervisor,
         rsp,
         footprint,
-        driver,
-        waiting,
+        OpaqueFunction(function=robot_nodes),
         OpaqueFunction(function=controller_nodes),
         RegisterEventHandler(OnProcessExit(target_action=webots, on_exit=[EmitEvent(event=Shutdown())])),
     ])

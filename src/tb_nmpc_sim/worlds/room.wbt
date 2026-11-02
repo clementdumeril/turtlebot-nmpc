@@ -1,0 +1,95 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/robotis/turtlebot/protos/TurtleBot3Burger.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/robotis/protos/RobotisLds01.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/Parquetry.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/Roughcast.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/factory/containers/protos/CardboardBox.proto"
+
+WorldInfo {
+  info [
+    "4 m x 3 m room with an inner wall (0.8 m door) and two boxes, for tb_explore."
+    "Same layout as scripts/explore_offline.py."
+  ]
+  title "turtlebot-nmpc room"
+  basicTimeStep 20
+}
+Viewpoint {
+  orientation -0.5774 0.5774 0.5774 2.0944
+  position 1.5 0 7.5
+}
+TexturedBackground {
+  skybox FALSE
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  translation 1.5 0 0
+  floorSize 4 3
+  floorAppearance Parquetry {
+  }
+  wallHeight 0.5
+  wallAppearance Roughcast {
+    colorOverride 0.85 0.8 0.7
+  }
+}
+Solid {
+  translation 1.6 -0.95 0.25
+  children [
+    DEF INNER Shape {
+      appearance Roughcast {
+        colorOverride 0.6 0.7 0.85
+      }
+      geometry Box {
+        size 0.05 1.1 0.5
+      }
+    }
+  ]
+  name "inner wall south"
+  boundingObject USE INNER
+}
+Solid {
+  translation 1.6 0.95 0.25
+  children [
+    USE INNER
+  ]
+  name "inner wall north"
+  boundingObject USE INNER
+}
+CardboardBox {
+  translation 0.6 0.9 0.15
+  name "box a"
+  size 0.3 0.3 0.3
+}
+CardboardBox {
+  translation 2.6 -0.7 0.2
+  name "box b"
+  size 0.4 0.4 0.4
+}
+DEF TB3 TurtleBot3Burger {
+  translation 0 0 0
+  controller "<extern>"
+  supervisor TRUE
+  extensionSlot [
+    Solid {
+      name "imu_link"
+    }
+    GPS {
+    }
+    InertialUnit {
+      name "inertial_unit"
+    }
+    RobotisLds01 {
+    }
+    Camera {
+      translation 0.07 0 0.1
+      name "camera"
+      fieldOfView 1.05
+      width 640
+      height 480
+    }
+  ]
+}
