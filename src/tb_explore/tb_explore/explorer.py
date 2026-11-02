@@ -78,7 +78,9 @@ class Explorer(Node):
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        map_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
+        # Volatile subscriber: compatible with a latched /map (simple_mapper) and with a plain one
+        # (cartographer_occupancy_grid_node publishes it again every second anyway).
+        map_qos = QoSProfile(depth=1, durability=DurabilityPolicy.VOLATILE, reliability=ReliabilityPolicy.RELIABLE)
         self.create_subscription(OccupancyGrid, g("map_topic"), self.on_map, map_qos)
         self.create_subscription(Odometry, g("odom_topic"), self.on_odom, qos_profile_sensor_data)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -131,7 +133,9 @@ class Explorer(Node):
     def on_start(self, _req, resp):
         pose = self.robot_pose()
         if pose is None or self.grid is None or self.yaw_odom is None:
-            resp.success, resp.message = False, "waiting for /map, /odom and TF map -> base_link"
+            missing = [n for n, ok in (("/map", self.grid is not None), ("/odom", self.yaw_odom is not None),
+                                       ("TF map -> base_link", pose is not None)) if not ok]
+            resp.success, resp.message = False, "waiting for " + ", ".join(missing)
             return resp
         self.setup_cmd_pub()
         self.home = pose[:2]
