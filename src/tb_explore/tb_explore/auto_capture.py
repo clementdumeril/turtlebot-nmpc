@@ -22,7 +22,7 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.duration import Duration
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import Image
 from std_msgs.msg import Int32
@@ -42,7 +42,7 @@ class AutoCapture(Node):
         super().__init__("auto_capture")
         for name, default in (("image_topic", "/image_raw"), ("target_frame", "map"), ("source_frame", "base_link"),
                               ("output_dir", os.path.expanduser("~/explore_captures")), ("max_image_age", 1.0),
-                              ("skip_frames", 1)):
+                              ("skip_frames", 1), ("image_reliable", True)):
             self.declare_parameter(name, default)
         g = lambda n: self.get_parameter(n).value  # noqa: E731
         self.g = g
@@ -56,7 +56,11 @@ class AutoCapture(Node):
         self.out = os.path.join(os.path.expanduser(g("output_dir")), time.strftime("run_%Y%m%d_%H%M%S"))
         os.makedirs(self.out, exist_ok=True)
         self.csv_path = os.path.join(self.out, "poses.csv")
-        self.create_subscription(Image, g("image_topic"), self.on_image, qos_profile_sensor_data)
+        # Reliable, as lab6_capture does: an image is hundreds of UDP fragments over the wifi, and
+        # with best effort one lost fragment drops the whole image (photos then stopped coming for
+        # tens of seconds on the lab TurtleBot). Set image_reliable:=false for a best-effort camera.
+        qos = QoSProfile(depth=2, reliability=ReliabilityPolicy.RELIABLE) if g("image_reliable") else qos_profile_sensor_data
+        self.create_subscription(Image, g("image_topic"), self.on_image, qos)
         self.saved_pub = self.create_publisher(Int32, "~/saved", 10)
         self.skip = 0
         self.create_service(Trigger, "~/capture", self.on_capture)
