@@ -1,0 +1,9 @@
+{
+ "controller": "nmpc",
+ "scenario": "",
+ "completed": true,
+ "t_start": 1793578130.3239553,
+ "t_end": 1793578199.3763008,
+ "rows": 1400,
+ "real": true
+}

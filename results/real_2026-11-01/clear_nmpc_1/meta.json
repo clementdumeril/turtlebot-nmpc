@@ -2,8 +2,8 @@
  "controller": "nmpc",
  "scenario": "",
  "completed": true,
- "t_start": 1793576476.838816,
- "t_end": 1793576517.4997315,
- "rows": 834,
+ "t_start": 1793576771.498373,
+ "t_end": 1793576838.798607,
+ "rows": 1368,
  "real": true
 }
