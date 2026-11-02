@@ -57,6 +57,8 @@ class Explorer(Node):
             ("max_time", 900.0),        # [s] whole exploration
             ("captures_per_spin", 12), ("spin_speed", 0.6), ("settle", 0.6),
             ("capture_at_goals", True), ("return_home", True), ("autostart", False),
+            ("capture_spacing", 0.3),   # [m] also take a photo every this much driving (0 = off): the
+                                        # spin photos share one point, the reconstruction needs parallax
         ):
             self.declare_parameter(name, default)
         g = lambda n: self.get_parameter(n).value  # noqa: E731
@@ -75,6 +77,7 @@ class Explorer(Node):
         self.n_goals = 0
         self.t_start = 0.0
         self.no_frontier = 0
+        self.last_shot = None
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -298,7 +301,17 @@ class Explorer(Node):
         self.done_after = self.now() + 0.3
         self.set_state(self.drive_state)
 
+    def capture_on_the_way(self):
+        spacing = self.g("capture_spacing")
+        pose = self.robot_pose()
+        if spacing <= 0 or pose is None or not self.capture_cli.service_is_ready():
+            return
+        if self.last_shot is None or math.hypot(pose[0] - self.last_shot[0], pose[1] - self.last_shot[1]) >= spacing:
+            self.capture_cli.call_async(Trigger.Request())
+            self.last_shot = pose[:2]
+
     def tick_drive(self):
+        self.capture_on_the_way()
         if self.done_flag:
             self.n_goals += 1
             self.blacklist.append(self.goal)

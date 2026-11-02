@@ -24,7 +24,7 @@ explorer --> /auto_capture/capture --> auto_capture: photo + TF map -> base_link
 - Unit tests (`src/tb_explore/test`): frontier on a half-known room, costmap, plan to the frontier that never crosses an occupied cell, blacklist, path home, log-odds map.
 - [`scripts/explore_offline.py`](../scripts/explore_offline.py): the planner and the NMPC in a simulated 4 m × 3 m room, with an inner wall (0.8 m door) and two boxes, a simulated lidar and the log-odds map. Result: 99 % of the room explored, 6 goals, 8 photo spots, back within 3 cm of the start, never closer than 9 cm to a wall, 292 s of robot time.
 - Webots, same room (`world:=room.wbt`), the whole ROS stack with `mapper:=simple`: 3 goals, 4 spins, 46 photos with poses, back home, 205 s. Photos were taken at 30° steps to within 2°. One photo was lost at the very start, before the camera streamed; there is now one retry.
-- Not tested yet: cartographer, which only exists on the lab machines, and the real camera.
+- Real robot, 2 November 2026 ([run](../results/explore_2026-11-02/README.md)): 2 goals, 36 photos with poses, back home in 257 s; Lab 6 bundle adjustment 0.30 px, but only 88 points. Fixed since: frontiers behind cartographer's uncertain band, and photos every 0.3 m while driving (`capture_spacing`).
 
 ## Run it on the robot (C106A lab)
 
@@ -44,7 +44,7 @@ ros2 service call /explorer/start std_srvs/srv/Trigger      # second terminal
 ros2 service call /explorer/stop std_srvs/srv/Trigger       # to stop at any time (or Ctrl-C the launch)
 ```
 
-Useful options: `max_speed:=0.10`, `max_time:=600`, `captures_per_spin:=8`, `image_topic:=/apple/image_raw` (if the camera is namespaced), `capture:=false`, `mapper:=simple` (if cartographer misbehaves), `rviz:=true`. The photos go to `~/explore_captures/run_<date>/`.
+On apple the camera topic is `/apple/image_raw`. Useful options: `max_speed:=0.10`, `max_time:=600`, `captures_per_spin:=8`, `image_topic:=/apple/image_raw` (if the camera is namespaced), `capture:=false`, `mapper:=simple` (if cartographer misbehaves), `rviz:=true`. The photos go to `~/explore_captures/run_<date>/`.
 
 Watch in RViz: `/map`, `/explorer/frontiers` (blue points, orange goal), `/tb_nmpc/reference_path`, `/tb_nmpc/obstacles`.
 

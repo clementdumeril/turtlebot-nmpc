@@ -64,3 +64,11 @@ def test_logodds_map_sees_a_wall():
     assert 0 <= g.data[i, j] < 25
     i, j = g.cell(-1.9, 1.9)
     assert g.data[i, j] == -1
+
+
+def test_frontier_behind_an_uncertain_band():
+    g = room()
+    g.data[:, 28:31] = 45          # cartographer: seen a little, neither free nor occupied
+    g.data[:, 31:] = -1
+    cl = frontiers(g, 5)
+    assert len(cl) == 1 and np.all(cl[0][:, 1] == 27)

@@ -47,6 +47,13 @@ class Grid:
     def unknown(self):
         return self.data < 0
 
+    @property
+    def unexplored(self):
+        """Unknown, or seen too little to be called free or occupied. Cartographer leaves a band of
+        such cells between free space and unknown space: counting only -1 there found no frontier
+        at all in the lab (exploration stopped after 2 goals)."""
+        return (self.data < 0) | ((self.data >= FREE_MAX) & (self.data < OCC_MIN))
+
 
 def disk(r: int) -> list[tuple[int, int]]:
     return [(di, dj) for di in range(-r, r + 1) for dj in range(-r, r + 1) if di * di + dj * dj <= r * r]
@@ -91,7 +98,7 @@ def costmap(g: Grid, hard_radius: float, soft_radius: float, soft_weight: float 
 def frontiers(g: Grid, min_cells: int) -> list[np.ndarray]:
     """Clusters of free cells next to unknown ones, each an (n, 2) array of (i, j), largest first."""
     eight = [(di, dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)]
-    mask = g.free & shift_or(g.unknown, eight)
+    mask = g.free & shift_or(g.unexplored, eight)
     seen = np.zeros_like(mask)
     clusters = []
     for i0, j0 in zip(*np.nonzero(mask)):
