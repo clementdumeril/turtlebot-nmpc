@@ -96,7 +96,7 @@ class Nav2Follow(Node):
     def track(self):
         if not self.running or self.pose is None:
             return
-        self.s, cte = self.path.project(self.pose[:2], self.s)
+        self.s, cte = self.path.project(self.pose[:2], self.s, back=0.1, ahead=0.3)
         now = self.get_clock().now().nanoseconds * 1e-9
         self.stats_pub.publish(Float64MultiArray(data=[now, self.s, cte]))
         if self.s >= self.path.length - 0.03:
@@ -109,10 +109,14 @@ class Nav2Follow(Node):
         # a straight line. The figure eight folds back on itself: a segment end close to the
         # robot switches on MPPI's goal critics, which stalled it at 0.01 m/s in my first runs.
         # 4 m is also short enough never to contain both passes through the centre crossing.
-        if self.s + self.g("window_max") >= self.path.length:
+        # On a small path the segment must also stay well under one lap, or it overlaps itself
+        # (on the real 3.14 m circle a 4 m segment wrapped around and MPPI cut through the middle).
+        lap = self.path.length / max(self.g("laps"), 1e-6)
+        wmin, wmax = min(self.g("window_min"), 0.4 * lap), min(self.g("window_max"), 0.6 * lap)
+        if self.s + wmax >= self.path.length:
             end = self.path.length
         else:
-            cand = np.arange(self.s + self.g("window_min"), self.s + self.g("window_max"), 0.05)
+            cand = np.arange(self.s + wmin, self.s + wmax, 0.05)
             cx, cy, _, _ = self.path.sample(cand)
             end = float(cand[np.argmax(np.hypot(cx - self.pose[0], cy - self.pose[1]))])
         ss = np.arange(max(self.s - 0.05, 0.0), end, 0.05)

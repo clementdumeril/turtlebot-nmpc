@@ -320,7 +320,10 @@ class NmpcNode(Node):
             x += v0 * math.cos(yaw) * lat
             y += v0 * math.sin(yaw) * lat
             yaw += w0 * lat
-        self.s, cte = self.path.project((x, y), self.s)
+        # Progress may only move a little per step (0.012 m at 0.12 m/s): a narrow window keeps a
+        # detour inside a small circle from snapping the progress to another part of the path,
+        # which made the robot cut across on the real circle (r = 0.5 m) with the 0.8 m default.
+        self.s, cte = self.path.project((x, y), self.s, back=0.1, ahead=0.3)
         obs = self.obstacle_params(now)
         s_ref, v_ref = self.path.horizon_s(self.s, self.g("v_ref"), self.cfg.dt, self.cfg.N)
         s_ref = self.path.skip_blocked(s_ref, self.static_inflated)
