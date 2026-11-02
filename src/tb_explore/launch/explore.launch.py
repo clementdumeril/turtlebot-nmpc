@@ -27,12 +27,14 @@ def make_nodes(context):
     if get("mapper") == "cartographer":
         carto = get_package_share_directory("turtlebot3_cartographer")
         nodes += [
-            Node(package="cartographer_ros", executable="cartographer_node", name="cartographer_node", output="screen",
+            # output="log": cartographer prints a warning per dropped scan point, which buried the
+            # explorer's own messages in the terminal. Its output stays in ~/.ros/log.
+            Node(package="cartographer_ros", executable="cartographer_node", name="cartographer_node", output="log",
                  parameters=[{"use_sim_time": sim}],
                  arguments=["-configuration_directory", os.path.join(carto, "config"),
                             "-configuration_basename", "turtlebot3_lds_2d.lua"]),
             Node(package="cartographer_ros", executable="cartographer_occupancy_grid_node",
-                 name="cartographer_occupancy_grid_node", output="screen", parameters=[{"use_sim_time": sim}],
+                 name="cartographer_occupancy_grid_node", output="log", parameters=[{"use_sim_time": sim}],
                  arguments=["-resolution", "0.05", "-publish_period_sec", "1.0"]),
         ]
     else:
@@ -68,7 +70,7 @@ def generate_launch_description():
         ("robot_model", "burger", "burger or tb4"),
         ("max_speed", "0.12", "[m/s]"),
         ("cmd_vel_type", "auto", "auto, twist or stamped"),
-        ("image_topic", "/image_raw", "camera topic (Webots: /camera/image_color)"),
+        ("image_topic", "/image_raw", "camera topic (C106A apple: /apple/image_raw, Webots: /TurtleBot3Burger/camera/image_color)"),
         ("output_dir", "~/explore_captures", "a run_YYYYmmdd_HHMMSS folder is created inside"),
         ("capture", "true", "false = explore without photos"),
         ("captures_per_spin", "12", "photos per turn in place (30 degrees apart)"),
