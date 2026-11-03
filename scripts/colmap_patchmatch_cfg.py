@@ -38,5 +38,5 @@ for i, r in enumerate(rows):
     counts.append(len(src))
     if src:
         lines += [r["file"], ", ".join(src)]
-open(a.out, "w").write("\n".join(lines) + "\n")
+open(a.out, "w", newline="\n").write("\n".join(lines) + "\n")
 print(f"{len(lines) // 2}/{len(rows)} reference images, sources per image: min {min(counts)}, median {int(np.median(counts))}")
