@@ -13,7 +13,7 @@ A personal project started on 30 October 2026, with access to the EECS C106A Tur
 
 ## The optimal control problem
 
-Every 0.1 s, from the measured state $\hat{x}(t)$, acados solves
+Every 0.1 s, from the measured state $`\hat{x}(t)`$, acados solves
 
 ```math
 \begin{aligned}
@@ -39,7 +39,7 @@ y(x, u) = \begin{bmatrix} p_x & p_y & \cos\theta & \sin\theta & v & \omega & a &
 y_N(x) = \begin{bmatrix} p_x & p_y & \cos\theta & \sin\theta & v \end{bmatrix}^{\top}
 ```
 
-The heading is tracked through $\cos\theta, \sin\theta$, so there is no angle wrapping. Each obstacle $j$ is a lidar cluster tracked by a constant-velocity Kalman filter (position $o_j$, velocity $\hat{v}_j$, velocity uncertainty $\sigma_{v,j}$, last update $t_j$), predicted to the time of stage $k$:
+The heading is tracked through $`\cos\theta, \sin\theta`$, so there is no angle wrapping. Each obstacle $`j`$ is a lidar cluster tracked by a constant-velocity Kalman filter (position $`o_j`$, velocity $`\hat{v}_j`$, velocity uncertainty $`\sigma_{v,j}`$, last update $`t_j`$), predicted to the time of stage $`k`$:
 
 ```math
 \tau_{k,j} = t - t_j + k\,\Delta t, \qquad
@@ -47,18 +47,18 @@ The heading is tracked through $\cos\theta, \sin\theta$, so there is no angle wr
 \hat{r}_j(\tau) = r_j + \min\left(0.25\ \mathrm{m},\ \sigma_{v,j}\,\tau\right)
 ```
 
-The reference $y^{\mathrm{ref}}_k$ is the path point at arc length $s_k = s_0 + k\,v_{\mathrm{ref}}\Delta t$ from the robot's projection $s_0$, with speed $v_{\mathrm{ref}}$, turn rate $v_{\mathrm{ref}}\,\kappa(s_k)$ and zero accelerations.
+The reference $`y^{\mathrm{ref}}_k`$ is the path point at arc length $`s_k = s_0 + k\,v_{\mathrm{ref}}\Delta t`$ from the robot's projection $`s_0`$, with speed $`v_{\mathrm{ref}}`$, turn rate $`v_{\mathrm{ref}}\,\kappa(s_k)`$ and zero accelerations.
 
 | | |
 |---|---|
-| Horizon | $N = 30$ stages of $\Delta t = 0.1$ s (3 s) |
-| Weights | $W = \mathrm{diag}(20, 20, 2, 2, 5, 0.2, 2, 0.2)$, $W_N = \mathrm{diag}(40, 40, 4, 4, 5)$ |
-| Obstacles | $M = 6$ per stage, the closest to the last predicted trajectory; walls as static 0.3 m pieces |
-| Slack penalty | $\rho_1 = 200$, $\rho_2 = 2000$: the QP stays feasible when someone steps next to the robot |
-| Limits (Burger) | $v_{\max} = 0.20$ m/s, $\omega_{\max} = 2.0$ rad/s, $a_{\max} = 0.5$ m/s², $\alpha_{\max} = 3.0$ rad/s² |
+| Horizon | $`N = 30`$ stages of $`\Delta t = 0.1`$ s (3 s) |
+| Weights | $`W = \mathrm{diag}(20, 20, 2, 2, 5, 0.2, 2, 0.2)`$, $`W_N = \mathrm{diag}(40, 40, 4, 4, 5)`$ |
+| Obstacles | $`M = 6`$ per stage, the closest to the last predicted trajectory; walls as static 0.3 m pieces |
+| Slack penalty | $`\rho_1 = 200`$, $`\rho_2 = 2000`$: the QP stays feasible when someone steps next to the robot |
+| Limits (Burger) | $`v_{\max} = 0.20`$ m/s, $`\omega_{\max} = 2.0`$ rad/s, $`a_{\max} = 0.5`$ m/s², $`\alpha_{\max} = 3.0`$ rad/s² |
 | Solver | SQP real-time iteration, Gauss-Newton, HPIPM with partial condensing: 0.85 ms median |
 
-With `predict:=false`, $\hat{v}_j = 0$: the obstacles stay where they are now. That is the ablation, and what a costmap controller like MPPI sees. Code: [`ocp.py`](src/tb_nmpc/tb_nmpc/ocp.py).
+With `predict:=false`, $`\hat{v}_j = 0`$: the obstacles stay where they are now. That is the ablation, and what a costmap controller like MPPI sees. Code: [`ocp.py`](src/tb_nmpc/tb_nmpc/ocp.py).
 
 ## On the real robot
 
