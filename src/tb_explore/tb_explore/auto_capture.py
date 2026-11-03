@@ -60,7 +60,10 @@ class AutoCapture(Node):
         # with best effort one lost fragment drops the whole image (photos then stopped coming for
         # tens of seconds on the lab TurtleBot). Set image_reliable:=false for a best-effort camera.
         qos = QoSProfile(depth=2, reliability=ReliabilityPolicy.RELIABLE) if g("image_reliable") else qos_profile_sensor_data
-        self.create_subscription(Image, g("image_topic"), self.on_image, qos)
+        self.qos = qos
+        self.topic = g("image_topic")
+        self.sub = self.create_subscription(Image, self.topic, self.on_image, qos)
+        self.t0 = time.monotonic()
         self.saved_pub = self.create_publisher(Int32, "~/saved", 10)
         self.skip = 0
         self.create_service(Trigger, "~/capture", self.on_capture)
@@ -68,8 +71,25 @@ class AutoCapture(Node):
         self.get_logger().info(f"listening on {g('image_topic')}, saving to {self.out}")
 
     def check_camera(self):
+        # Nothing on the given topic after 3 s: switch to the live image topic if there is exactly
+        # one (the lab robots publish under their name, /apple/image_raw; a run on 2 November
+        # took no photo because the launch was started without image_topic:=).
+        if self.last_arrival == 0.0 and time.monotonic() - self.t0 > 3.0:
+            live = [n for n, types in self.get_topic_names_and_types()
+                    if "sensor_msgs/msg/Image" in types and n != self.topic and self.count_publishers(n) > 0
+                    and not n.endswith(("compressed", "theora", "compressedDepth"))]
+            raw = [n for n in live if n.endswith("image_raw")] or live
+            if len(raw) == 1:
+                self.get_logger().warn(f"no image on {self.topic}: switching to {raw[0]}")
+                self.destroy_subscription(self.sub)
+                self.topic = raw[0]
+                self.sub = self.create_subscription(Image, self.topic, self.on_image, self.qos)
+                self.t0 = time.monotonic()
+            elif live:
+                self.get_logger().error(f"no image on {self.topic}; live image topics: {', '.join(live)}. "
+                                        f"Relaunch with image_topic:=<one of them>", throttle_duration_sec=10.0)
         if self.pending_since is not None and time.monotonic() - self.pending_since > self.g("max_image_age"):
-            self.get_logger().warn(f"no new image on {self.g('image_topic')} for "
+            self.get_logger().warn(f"no new image on {self.topic} for "
                                    f"{time.monotonic() - self.pending_since:.1f} s, is the camera running?")
 
     def on_capture(self, _req, resp):
@@ -90,6 +110,7 @@ class AutoCapture(Node):
 
     def on_image(self, msg: Image):
         arrival = time.monotonic()
+        self.last_arrival = arrival
         with self.lock:
             take = self.pending_since is not None and arrival > self.pending_since
             if take and self.skip > 0:
