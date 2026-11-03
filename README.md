@@ -29,10 +29,14 @@ Every 0.1 s, from the measured state $\hat{x}(t)$, acados solves
 on the unicycle with the velocities as states, so the acceleration limits are hard and the command is smooth:
 
 ```math
-x = \begin{bmatrix} p_x \\ p_y \\ \theta \\ v \\ \omega \end{bmatrix},\quad
-u = \begin{bmatrix} a \\ \alpha \end{bmatrix},\quad
-\dot{x} = \begin{bmatrix} v\cos\theta \\ v\sin\theta \\ \omega \\ a \\ \alpha \end{bmatrix},\qquad
-y = \begin{bmatrix} p_x & p_y & \cos\theta & \sin\theta & v & \omega & a & \alpha \end{bmatrix}^{\top}
+x = \begin{bmatrix} p_x & p_y & \theta & v & \omega \end{bmatrix}^{\top}, \qquad
+u = \begin{bmatrix} a & \alpha \end{bmatrix}^{\top}, \qquad
+\dot{p}_x = v\cos\theta,\;\; \dot{p}_y = v\sin\theta,\;\; \dot{\theta} = \omega,\;\; \dot{v} = a,\;\; \dot{\omega} = \alpha
+```
+
+```math
+y(x, u) = \begin{bmatrix} p_x & p_y & \cos\theta & \sin\theta & v & \omega & a & \alpha \end{bmatrix}^{\top}, \qquad
+y_N(x) = \begin{bmatrix} p_x & p_y & \cos\theta & \sin\theta & v \end{bmatrix}^{\top}
 ```
 
 The heading is tracked through $\cos\theta, \sin\theta$, so there is no angle wrapping. Each obstacle $j$ is a lidar cluster tracked by a constant-velocity Kalman filter (position $o_j$, velocity $\hat{v}_j$, velocity uncertainty $\sigma_{v,j}$, last update $t_j$), predicted to the time of stage $k$:
