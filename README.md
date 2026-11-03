@@ -12,6 +12,8 @@ A personal project started on 30 October 2026, while I have access to the EECS C
 
 The lab TurtleBot3 Burger "apple" (EECS C106A, ROS 2 Humble), with the controller on the lab workstation. No motion capture: positions come from odometry and cartographer.
 
+![The real TurtleBot3 driving a figure eight with the NMPC in the C106A lab, phone video at 2.5x speed](docs/figures/real_figure_eight.webp)
+
 **Autonomous exploration, 2 November 2026.** The robot picks a reachable frontier of the cartographer map, drives there with the NMPC, spins in place taking a photo every 30°, and also takes one every 30 cm while driving. Run 3: 5 min 30 s, 13.9 m driven, 4 frontier goals, a 13.2 m x 8.4 m map, 76 photos. Replayed from its rosbag:
 
 ![The cartographer map growing as the robot explores, with its path, lidar points and frontier goals, replayed from the rosbag](docs/figures/real_exploration_run3.gif)
