@@ -8,6 +8,26 @@ An acados NMPC for a TurtleBot3 that tracks moving obstacles with the 2D lidar a
 
 A personal project started on 30 October 2026, while I have access to the EECS C106A lab TurtleBots at UC Berkeley. My other control projects ([quadrotor NMPC](https://github.com/clementdumeril/quadrotor-ros2), UR5e, fixed-wing RL) only run in simulation. The question here: if the MPC predicts where a person walking across the path will be over its 3 s horizon, does it avoid them better than Nav2's MPPI controller, which only sees the current costmap? Same robot limits, same path, same scenarios for every controller.
 
+## On the real robot
+
+The lab TurtleBot3 Burger "apple" (EECS C106A, ROS 2 Humble), with the controller on the lab workstation. No motion capture: positions come from odometry and cartographer.
+
+**Autonomous exploration, 2 November 2026.** The robot picks a reachable frontier of the cartographer map, drives there with the NMPC, spins in place taking a photo every 30°, and also takes one every 30 cm while driving. Run 3: 5 min 30 s, 13.9 m driven, 4 frontier goals, a 13.2 m x 8.4 m map, 76 photos. Replayed from its rosbag:
+
+![The cartographer map growing as the robot explores, with its path, lidar points and frontier goals, replayed from the rosbag](docs/figures/real_exploration_run3.gif)
+
+![Final map with the robot's path, where each of the 76 photos was taken, and ten of them pinned to their spot](docs/figures/real_photo_map.png)
+
+Each spin gives a 360° panorama, stitched with the robot's own heading ([how](results/explore_2026-11-02c/README.md)):
+
+![Panorama of the second spin, at the west end of the room](results/explore_2026-11-02c/panoramas/pano_1.jpg)
+
+![Panorama of the third spin, at the east end of the room](results/explore_2026-11-02c/panoramas/pano_2.jpg)
+
+**NMPC laps, 1 November 2026.** At a 0.12 m/s cap, the NMPC follows a 0.5 m circle with 1.0 cm RMS tracking error in the odometry frame ([runs](results/real_2026-11-01)). The runs with a box on the circle need redoing before they compare anything.
+
+![Real circle lap coloured by speed, and the cross-track error over time](docs/figures/real_laps.png)
+
 ## Status
 
 - [x] NMPC, lidar tracking and prediction, ROS 2 node (Jazzy, also written for Humble)
