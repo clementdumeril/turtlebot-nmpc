@@ -40,3 +40,13 @@ def test_sensor_pose_is_applied():
     r, amin, inc = ray_scan([(1.0, 0.0, 0.15)])
     small, _ = detect(r, amin, inc, (2.0, 1.0, np.pi / 2), PerceptionParams())
     assert np.hypot(small[0, 0] - 2.0, small[0, 1] - 2.0) < 0.06
+
+
+def test_chair_column_gets_the_base_radius():
+    r, amin, inc = ray_scan([(1.0, 0.0, 0.025)])          # a 5 cm chair column
+    p = PerceptionParams(pole_radius=0.32, merge_dist=0.35)
+    small, _ = detect(r, amin, inc, (0.0, 0.0, 0.0), p)
+    assert len(small) == 1 and abs(small[0, 2] - 0.32) < 1e-9
+    r, amin, inc = ray_scan([(1.2, 0.5, 0.15)])           # a 30 cm object keeps its size
+    small, _ = detect(r, amin, inc, (0.0, 0.0, 0.0), p)
+    assert small[0, 2] < 0.25

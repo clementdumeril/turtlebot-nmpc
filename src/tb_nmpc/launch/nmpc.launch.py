@@ -33,6 +33,7 @@ def make_nodes(context):
         "odom_topic": get("odom_topic"),
         "autostart": get("autostart") == "true",
         "latency": float(get("latency")),
+        "chair_radius": float(get("chair_radius")),
     }
     if get("max_speed"):
         v = min(float(get("max_speed")), HARDWARE_MAX[get("robot_model")] - 0.02)
@@ -58,6 +59,7 @@ def generate_launch_description():
         ("odom_topic", "/odom", ""),
         ("autostart", "false", ""),
         ("latency", "0.0", "[s] forward-predict the initial state"),
+        ("chair_radius", "0.0", "[m] > 0: thin lidar clusters (chair columns) get a chair-base radius"),
     ]
     return LaunchDescription([DeclareLaunchArgument(n, default_value=d, description=h) for n, d, h in args]
                              + [OpaqueFunction(function=make_nodes)])

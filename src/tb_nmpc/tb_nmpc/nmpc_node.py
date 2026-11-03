@@ -76,6 +76,8 @@ class NmpcNode(Node):
         P("laser_y", 0.0)
         P("laser_yaw", 0.0)
         P("leg_merge_dist", 0.35)
+        P("chair_radius", 0.0)             # [m] > 0: thin clusters (chair columns) become chair-base sized
+        P("chair_max_extent", 0.10)
         P("track_v_static", 0.10)          # [m/s] tracks slower than this are predicted static
         P("track_min_hits", 3)             # detections before a track's velocity is used
         P("odom_timeout", 0.5)             # [s] zero command if odometry is older than this
@@ -90,7 +92,8 @@ class NmpcNode(Node):
         self.mpc = Nmpc(cfg)
         self.get_logger().info(f"acados solver ready in {time.time() - t0:.1f} s (N={cfg.N}, dt={cfg.dt}, M={cfg.M})")
         self.cfg = cfg
-        self.perc = PerceptionParams(merge_dist=g("leg_merge_dist"))
+        self.perc = PerceptionParams(merge_dist=g("leg_merge_dist"), pole_radius=g("chair_radius"),
+                                     pole_max=g("chair_max_extent"))
         self.tracker = Tracker(TrackerParams(v_static=g("track_v_static"), min_hits=g("track_min_hits")))
         self.static = np.zeros((0, 3))
         self.static_inflated = np.zeros((0, 3))

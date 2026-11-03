@@ -1,7 +1,7 @@
 """Exploration closed loop without ROS: a 4 m x 3 m room with an inner wall and two boxes,
 a simulated 360-beam lidar, the log-odds map, the explorer's frontier planner and the NMPC.
 
-    python3 scripts/explore_offline.py [--plot explore_offline.png]
+    python3 scripts/explore_offline.py [--plot explore_offline.png] [--chairs [--chair-radius 0]]
 
 Prints the explored fraction, goals, photo spots, time and the closest approach to a wall.
 Takes about a minute.
@@ -34,7 +34,11 @@ def box(cx, cy, hx, hy):
 # Room 4 x 3 m (x in [-0.5, 3.5], y in [-1.5, 1.5]), an inner wall with a 0.8 m door, two boxes.
 WALLS = box(1.5, 0.0, 2.0, 1.5) + [((1.6, -1.5), (1.6, -0.4)), ((1.6, 0.4), (1.6, 1.5))] \
     + box(0.6, 0.9, 0.15, 0.15) + box(2.6, -0.7, 0.2, 0.2)
+# Office chairs: the lidar sees only the 5 cm column; the 30 cm base under it is invisible.
+CHAIRS = [(0.9, -0.6), (2.3, 0.6), (0.2, 0.9), (3.0, 0.1)]
+CHAIR_BASE = 0.30
 SEG = np.array([[a[0], a[1], b[0], b[1]] for a, b in WALLS])
+SEG_CH = np.array([[a[0], a[1], b[0], b[1]] for c in CHAIRS for a, b in box(c[0], c[1], 0.025, 0.025)])
 
 
 def raycast(x, y, yaw, n=360, rmax=3.5):
@@ -62,14 +66,21 @@ def wall_distance(p):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--plot", default="")
+    ap.add_argument("--chairs", action="store_true", help="add four office chairs")
+    ap.add_argument("--chair-radius", type=float, default=0.32, help="chair handling in perception and planner (0 = off)")
     args = ap.parse_args()
     cfg = OcpConfig(v_max=0.12)
     mpc = Nmpc(cfg)
-    perc = PerceptionParams()
+    global SEG
+    if args.chairs:
+        SEG = np.vstack([SEG, SEG_CH])
+    cr = args.chair_radius if args.chairs else 0.0
+    perc = PerceptionParams(pole_radius=cr, merge_dist=0.35)
     m = LogOddsMap(8.0, 0.05, (1.5, 0.0))
     x = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
     t, dt = 0.0, cfg.dt
     trail, spots, goals, blacklist, closest = [x[:2].copy()], [], 0, [], np.inf
+    chair_hit = np.inf
 
     def sense():
         r, amin, inc = raycast(x[0], x[1], x[2])
@@ -85,7 +96,7 @@ def main():
         spots.append(x[:2].copy())
 
     def follow(xy, timeout=60.0):
-        nonlocal t, closest
+        nonlocal t, closest, chair_hit
         path = Path(resample(xy))
         x[2] = np.arctan2(xy[min(1, len(xy) - 1), 1] - x[1], xy[min(1, len(xy) - 1), 0] - x[0])  # align
         x[3:] = 0.0
@@ -112,19 +123,21 @@ def main():
             t += dt
             trail.append(x[:2].copy())
             closest = min(closest, wall_distance(x[:2]) - ROBOT_R)
+            if args.chairs:
+                chair_hit = min(chair_hit, min(np.hypot(x[0] - cx, x[1] - cy) for cx, cy in CHAIRS) - CHAIR_BASE - ROBOT_R)
         return s >= path.length - 0.03
 
     sense()
     spin()
     while t < 900:
-        plan, clusters = plan_to_frontier(m.grid(), x[:2], 0.17, 0.40, 8, 0.35, 0.5, blacklist, 0.35)
+        plan, clusters = plan_to_frontier(m.grid(), x[:2], 0.17, 0.40, 8, 0.35, 0.5, blacklist, 0.35, chair_radius=cr)
         if plan is None:
             break
         ok = follow(plan.path_xy)
         blacklist.append(plan.goal_xy)
         goals += ok
         spin()
-    home = plan_to_point(m.grid(), x[:2], (0.0, 0.0), 0.17, 0.40)
+    home = plan_to_point(m.grid(), x[:2], (0.0, 0.0), 0.17, 0.40, chair_radius=cr)
     if home is not None:
         follow(home)
 
@@ -137,7 +150,8 @@ def main():
     frac = (known & inside).sum() / inside.sum()
     print(f"explored {frac*100:.0f}% of the room, {goals} goals reached, {len(spots)} photo spots "
           f"({12*len(spots)} photos), {t:.0f} s, closest approach to a wall {closest*100:.1f} cm, "
-          f"ended {np.hypot(*x[:2]):.2f} m from the start")
+          f"ended {np.hypot(*x[:2]):.2f} m from the start"
+          + (f", closest approach to a chair base {chair_hit*100:.1f} cm (negative = on the legs)" if args.chairs else ""))
     if args.plot:
         import matplotlib
         matplotlib.use("Agg")

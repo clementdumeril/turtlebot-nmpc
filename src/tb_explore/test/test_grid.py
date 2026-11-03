@@ -72,3 +72,11 @@ def test_frontier_behind_an_uncertain_band():
     g.data[:, 31:] = -1
     cl = frontiers(g, 5)
     assert len(cl) == 1 and np.all(cl[0][:, 1] == 27)
+
+
+def test_chair_column_is_grown_on_the_map():
+    g = room()
+    g.data[20, 15] = 100                                   # one cell: a chair column
+    plain = costmap(g, 0.15, 0.4)
+    chair = costmap(g, 0.15, 0.4, chair_radius=0.32)
+    assert np.isfinite(plain[20, 21]) and np.isinf(chair[20, 21])   # 30 cm to the side

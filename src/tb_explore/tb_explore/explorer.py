@@ -57,6 +57,8 @@ class Explorer(Node):
             ("max_time", 900.0),        # [s] whole exploration
             ("captures_per_spin", 12), ("spin_speed", 0.6), ("settle", 0.6),
             ("capture_at_goals", True), ("return_home", True), ("autostart", False),
+            ("chair_radius", 0.32),     # [m] thin obstacles (chair columns) planned around as chair bases
+            ("chair_cells", 6),
             ("capture_spacing", 0.3),   # [m] also take a photo every this much driving (0 = off): the
                                         # spin photos share one point, the reconstruction needs parallax
         ):
@@ -261,7 +263,8 @@ class Explorer(Node):
         t0 = time.perf_counter()
         plan, clusters = plan_to_frontier(
             self.grid, pose[:2], self.g("hard_radius"), self.g("soft_radius"), self.g("min_frontier"),
-            self.g("min_goal_dist"), self.g("size_weight"), self.blacklist, self.g("blacklist_radius"))
+            self.g("min_goal_dist"), self.g("size_weight"), self.blacklist, self.g("blacklist_radius"),
+            chair_radius=self.g("chair_radius"), chair_cells=self.g("chair_cells"))
         self.publish_markers(clusters, plan.goal_xy if plan else None)
         if plan is None:
             # Confirm on later maps (the mapper publishes at 1 Hz) before calling it finished.
@@ -329,7 +332,8 @@ class Explorer(Node):
         pose = self.robot_pose()
         if self.g("return_home") and pose is not None and self.home is not None and self.grid is not None \
                 and math.hypot(pose[0] - self.home[0], pose[1] - self.home[1]) > 0.3:
-            xy = plan_to_point(self.grid, pose[:2], self.home, self.g("hard_radius"), self.g("soft_radius"))
+            xy = plan_to_point(self.grid, pose[:2], self.home, self.g("hard_radius"), self.g("soft_radius"),
+                               chair_radius=self.g("chair_radius"), chair_cells=self.g("chair_cells"))
             if xy is not None:
                 self.get_logger().info("driving home")
                 self.goal = self.home

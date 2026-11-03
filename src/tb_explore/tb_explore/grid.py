@@ -83,12 +83,44 @@ def obstacle_distance(occ: np.ndarray, max_cells: int) -> np.ndarray:
     return d
 
 
-def costmap(g: Grid, hard_radius: float, soft_radius: float, soft_weight: float = 4.0) -> np.ndarray:
+def small_blobs(occ: np.ndarray, max_cells: int) -> np.ndarray:
+    """Occupied connected components of at most max_cells cells (8-connected)."""
+    eight = [(di, dj) for di in (-1, 0, 1) for dj in (-1, 0, 1) if di or dj]
+    seen = np.zeros_like(occ)
+    out = np.zeros_like(occ)
+    H, W = occ.shape
+    for i0, j0 in zip(*np.nonzero(occ)):
+        if seen[i0, j0]:
+            continue
+        stack, cells = [(i0, j0)], []
+        seen[i0, j0] = True
+        while stack:
+            i, j = stack.pop()
+            cells.append((i, j))
+            for di, dj in eight:
+                a, b = i + di, j + dj
+                if 0 <= a < H and 0 <= b < W and occ[a, b] and not seen[a, b]:
+                    seen[a, b] = True
+                    stack.append((a, b))
+        if len(cells) <= max_cells:
+            ii, jj = zip(*cells)
+            out[list(ii), list(jj)] = True
+    return out
+
+
+def costmap(g: Grid, hard_radius: float, soft_radius: float, soft_weight: float = 4.0,
+            chair_radius: float = 0.0, chair_cells: int = 6) -> np.ndarray:
     """Per-cell traversal cost: inf on obstacles, within hard_radius of one, and on unknown cells;
-    1 + soft_weight * (closeness within soft_radius) elsewhere, so paths keep to the middle."""
+    1 + soft_weight * (closeness within soft_radius) elsewhere, so paths keep to the middle.
+
+    chair_radius > 0: small isolated obstacles (<= chair_cells cells, a chair column or a table
+    leg as the lidar sees it) are grown to that radius first, for the chair base under the scan."""
     hard = int(np.ceil(hard_radius / g.res))
     soft = max(hard + 1, int(np.ceil(soft_radius / g.res)))
-    d = obstacle_distance(g.occupied, soft)
+    occ = g.occupied
+    if chair_radius > 0:
+        occ = occ | shift_or(small_blobs(occ, chair_cells), disk(int(round(chair_radius / g.res))))
+    d = obstacle_distance(occ, soft)
     cost = 1.0 + soft_weight * np.clip((soft - d) / max(soft - hard, 1), 0.0, 1.0)
     cost[d <= hard] = np.inf
     cost[~g.free] = np.inf
@@ -194,14 +226,14 @@ class Plan:
 
 def plan_to_frontier(g: Grid, robot_xy, hard_radius: float, soft_radius: float, min_cells: int,
                      min_goal_dist: float, size_weight: float, blacklist: list, blacklist_radius: float,
-                     approach: float = 0.35):
+                     approach: float = 0.35, chair_radius: float = 0.0, chair_cells: int = 6):
     """Best reachable frontier: score = path length - size_weight * frontier length [m].
 
     The goal is the reachable cell closest (by path) among those within `approach` of the
     cluster, since frontier cells themselves are often inside the inflated band.
     Returns (Plan or None, clusters).
     """
-    cost = costmap(g, hard_radius, soft_radius)
+    cost = costmap(g, hard_radius, soft_radius, chair_radius=chair_radius, chair_cells=chair_cells)
     start = g.cell(*robot_xy)
     if not g.inside(*start):
         return None, []
@@ -241,9 +273,10 @@ def plan_to_frontier(g: Grid, robot_xy, hard_radius: float, soft_radius: float, 
     return Plan((float(xy[-1, 0]), float(xy[-1, 1])), xy, float(length), int(size)), clusters
 
 
-def plan_to_point(g: Grid, robot_xy, goal_xy, hard_radius: float, soft_radius: float):
+def plan_to_point(g: Grid, robot_xy, goal_xy, hard_radius: float, soft_radius: float,
+                  chair_radius: float = 0.0, chair_cells: int = 6):
     """Path to a given point (going home), or None if it is not reachable."""
-    cost = costmap(g, hard_radius, soft_radius)
+    cost = costmap(g, hard_radius, soft_radius, chair_radius=chair_radius, chair_cells=chair_cells)
     start, goal = g.cell(*robot_xy), g.cell(*goal_xy)
     if not (g.inside(*start) and g.inside(*goal)):
         return None

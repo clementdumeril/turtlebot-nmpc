@@ -23,6 +23,8 @@ class PerceptionParams:
     r_min: float = 0.08            # [m] smallest circle radius
     chunk: float = 0.3             # [m] length of the pieces a long cluster is cut into
     merge_dist: float = 0.0        # [m] merge small circles whose centres are closer (two legs); 0 = off
+    pole_max: float = 0.10         # [m] clusters this thin are poles: chair or table legs ...
+    pole_radius: float = 0.0       # [m] ... given this radius (office-chair base below the lidar); 0 = off
 
 
 def scan_points(ranges, angle_min: float, angle_inc: float, p: PerceptionParams):
@@ -58,7 +60,7 @@ def circles(r, a, groups, sensor_pose, p: PerceptionParams):
     Returns (small, static): arrays (n, 3) of [cx, cy, radius].
     """
     sx, sy, syaw = sensor_pose
-    small, static = [], []
+    small, static, pole_flags = [], [], []
     for g in groups:
         ang = a[g] + syaw
         pts = np.stack([sx + r[g] * np.cos(ang), sy + r[g] * np.sin(ang)], axis=1)
@@ -71,6 +73,7 @@ def circles(r, a, groups, sensor_pose, p: PerceptionParams):
             u /= max(np.hypot(*u), 1e-6)
             c = c + 0.5 * rad * u
             small.append([c[0], c[1], rad])
+            pole_flags.append(extent <= p.pole_max)
         else:
             n = max(1, int(np.ceil(extent / p.chunk)))
             for chunk in np.array_split(pts, n):
@@ -80,8 +83,16 @@ def circles(r, a, groups, sensor_pose, p: PerceptionParams):
                 rad = max(p.r_min, float(np.hypot(*(chunk - c).T).max()))
                 static.append([c[0], c[1], rad])
     small = np.array(small).reshape(-1, 3)
+    poles = small[np.array(pole_flags, bool)] if len(small) else small
     if p.merge_dist > 0 and len(small) > 1:
         small = merge_close(small, p.merge_dist)
+    if p.pole_radius > 0 and len(poles):
+        # A TurtleBot3 lidar (17 cm up) sees only the column of an office chair: its five-leg base
+        # spreads about 30 cm around, below the scan, and the robot drove into it. A thin cluster
+        # that was not merged with a neighbour (two legs of a person) gets the base's radius.
+        for k, c in enumerate(small):
+            if np.any(np.all(np.abs(poles - c) < 1e-9, axis=1)):
+                small[k, 2] = max(c[2], p.pole_radius)
     return small, np.array(static).reshape(-1, 3)
 
 
