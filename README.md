@@ -1,6 +1,8 @@
 # TurtleBot NMPC with lidar obstacle prediction, against Nav2 MPPI
 
-An acados NMPC for a TurtleBot3 that tracks moving obstacles with the 2D lidar and plans around where they will be over the next 3 s. In Webots it avoided a person crossing its path at 0.5 m/s in 6 of 7 runs (median 12 cm closest, worst -2.2 cm), while Nav2's MPPI made contact in all 3 of its runs; median solve 0.85 ms. Real-robot runs are planned for 31 October 2026.
+![360° panorama of the lab, stitched from 13 photos the TurtleBot took on its own while exploring, using its own heading](results/explore_2026-11-02c/panoramas/pano_0.jpg)
+
+An acados NMPC for a TurtleBot3 that tracks moving obstacles with the 2D lidar and plans around where they will be over the next 3 s. In Webots it avoided a person crossing its path at 0.5 m/s in 6 of 7 runs (median 12 cm closest, worst -2.2 cm), while Nav2's MPPI made contact in all 3 of its runs; median solve 0.85 ms.
 
 ![Top view drawn from the logged Webots ground truth, person crossing at 0.5 m/s: the NMPC slows and passes behind them, Nav2 MPPI keeps going and is hit](docs/figures/crossing_nmpc_vs_mppi.gif)
 
@@ -11,7 +13,7 @@ A personal project started on 30 October 2026, while I have access to the EECS C
 - [x] NMPC, lidar tracking and prediction, ROS 2 node (Jazzy, also written for Humble)
 - [x] Webots benchmark against Nav2 MPPI and Regulated Pure Pursuit, 4 scenarios x 2 runs
 - [x] First real-robot laps, 1 November 2026: figure eight and circle on the lab TurtleBot3 (1.0 cm RMSE in the odometry frame on a 0.5 m circle, [runs](results/real_2026-11-01)). The obstacle runs need redoing (see the notes there). The numbers in Results are from simulation.
-- [ ] Autonomous exploration with photo capture for a 3D reconstruction ([docs/EXPLORATION.md](docs/EXPLORATION.md)): checked offline and in Webots, not yet on the robot.
+- [x] Autonomous exploration on the real robot with photo capture, 2 November 2026 ([docs/EXPLORATION.md](docs/EXPLORATION.md), [run 3](results/explore_2026-11-02c)): 13.2 m x 8.4 m map, 76 photos, 360° panoramas from the spins (top image). A dense 3D reconstruction from these photos did not work.
 
 ## Results
 
