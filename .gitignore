@@ -9,3 +9,5 @@ c_generated_code/
 results/**/raw_video/
 results/**/sim.log
 results/sim_*/**/run.csv
+results/*/reconstruction/dense/mvs/
+colmap_dense_*.log

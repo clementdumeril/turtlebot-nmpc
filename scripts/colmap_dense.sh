@@ -20,12 +20,15 @@ export APPTAINER_CACHEDIR=/global/scratch/users/$USER/.apptainer
 [ -f "$SIF" ] || $RUN pull "$SIF" docker://colmap/colmap:latest
 C="$RUN exec --nv $SIF colmap"
 nvidia-smi
-mkdir -p $OUT
-$C image_undistorter --image_path $R/run_20261102_170423 --input_path $R/reconstruction/colmap_fixed_poses \
-    --output_path $OUT/mvs --output_type COLMAP
-$C patch_match_stereo --workspace_path $OUT/mvs --PatchMatchStereo.geom_consistency 1
-$C stereo_fusion --workspace_path $OUT/mvs --output_path $OUT/fused.ply
-$C poisson_mesher --input_path $OUT/fused.ply --output_path $OUT/meshed-poisson.ply
-$C delaunay_mesher --input_path $OUT/mvs --output_path $OUT/meshed-delaunay.ply
-rm -rf $OUT/mvs
+rm -rf $OUT && mkdir -p $OUT
+$C image_undistorter --image_path $R/run_20261102_170423 --input_path $R/reconstruction/colmap_fixed_poses     --output_path $OUT/mvs --output_type COLMAP
+# Source images picked from the robot poses (scripts/colmap_patchmatch_cfg.py), not from SIFT tracks.
+cp $R/reconstruction/patch-match.cfg $OUT/mvs/stereo/patch-match.cfg
+$C patch_match_stereo --workspace_path $OUT/mvs --PatchMatchStereo.geom_consistency 1     --PatchMatchStereo.depth_min 0.15 --PatchMatchStereo.depth_max 8     --PatchMatchStereo.filter_min_triangulation_angle 1.5
+FUSE="--StereoFusion.min_num_pixels 3 --StereoFusion.max_reproj_error 4 --StereoFusion.max_depth_error 0.02"
+$C stereo_fusion --workspace_path $OUT/mvs --input_type photometric --output_path $OUT/fused_photometric.ply $FUSE
+$C stereo_fusion --workspace_path $OUT/mvs --input_type geometric --output_path $OUT/mvs/fused.ply $FUSE
+cp $OUT/mvs/fused.ply $OUT/fused.ply
+$C poisson_mesher --input_path $OUT/fused.ply --output_path $OUT/meshed-poisson.ply || true
+$C delaunay_mesher --input_path $OUT/mvs --output_path $OUT/meshed-delaunay.ply || true
 ls -la $OUT
