@@ -49,13 +49,16 @@ def make_nodes(context):
                     {"use_sim_time": sim, "path_source": "topic", "v_max": v, "v_ref": 0.9 * v,
                      "cmd_vel_type": get("cmd_vel_type"), "safety_margin": 0.03,
                      "track_v_static": float(get("track_v_static")), "track_min_hits": int(get("track_min_hits")),
-                     "chair_radius": float(get("chair_radius"))}]))
+                     "chair_radius": float(get("chair_radius")),
+                     "chair_max_extent": float(get("chair_max_extent"))}]))
     nodes.append(Node(package="tb_explore", executable="explorer", output="screen",
                       parameters=[{"use_sim_time": sim, "cmd_vel_type": get("cmd_vel_type"),
                                    "autostart": get("autostart") == "true",
                                    "max_time": float(get("max_time")),
                                    "captures_per_spin": int(get("captures_per_spin")),
-                                   "chair_radius": float(get("chair_radius"))}]))
+                                   "chair_radius": float(get("chair_radius")),
+                                   # map blobs up to the same width: (width / 5 cm + 1)^2 cells
+                                   "chair_cells": int((float(get("chair_max_extent")) / 0.05 + 1) ** 2)}]))
     if get("capture") == "true":
         nodes.append(Node(package="tb_explore", executable="auto_capture", output="screen",
                           parameters=[{"use_sim_time": sim, "image_topic": get("image_topic"),
@@ -78,6 +81,7 @@ def generate_launch_description():
         ("captures_per_spin", "12", "photos per turn in place (30 degrees apart)"),
         ("max_time", "900", "[s] exploration budget"),
         ("chair_radius", "0.32", "[m] thin obstacles (chair columns, table legs) treated as chair bases; 0 = off"),
+        ("chair_max_extent", "0.10", "[m] widest lidar trace still treated as a chair column"),
         ("track_v_static", "0.2", ""),
         ("track_min_hits", "4", ""),
         ("autostart", "false", ""),
