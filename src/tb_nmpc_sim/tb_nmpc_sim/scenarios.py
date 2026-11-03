@@ -33,6 +33,7 @@ SCENARIOS = {
 
 
 def path() -> Path:
+    """The benchmark figure eight (half-width PATH_SIZE) as a reference Path."""
     return Path(lemniscate(PATH_SIZE))
 
 
@@ -42,6 +43,7 @@ def static_obstacles(name: str, p: Path | None = None) -> list[tuple[str, float,
     out = []
     for d, s, off in SCENARIOS[name]["static"]:
         x, y, th, _ = p.sample(s)
+        # offset along the left normal (-sin th, cos th) of the path heading th
         out.append((d, float(x - off * np.sin(th)), float(y + off * np.cos(th)), RADIUS[d]))
     return out
 
@@ -58,7 +60,8 @@ def pedestrian(name: str, p: Path | None = None):
     start = cross + left * spec["dist"]
     end = cross - left * spec["dist"]
     vel = -left * spec["speed"]
-    s_trigger = spec["s"] - V_NOMINAL * spec["dist"] / spec["speed"]
+    # the walk takes dist / speed; at V_NOMINAL the robot covers V_NOMINAL * that, so both reach the crossing together
+    s_trigger =spec["s"] - V_NOMINAL * spec["dist"] / spec["speed"]
     return start, end, vel, s_trigger
 
 
@@ -68,6 +71,7 @@ def static_clearance(name: str, xy: np.ndarray, p: Path | None = None) -> np.nda
     out = np.full(len(xy), np.inf)
     for d, ox, oy, r in static_obstacles(name, p):
         if d in BOX_HALF:
+            # point-to-square distance: per-axis excess beyond the half side, then the norm
             h = BOX_HALF[d]
             dx = np.maximum(np.abs(xy[:, 0] - ox) - h, 0.0)
             dy = np.maximum(np.abs(xy[:, 1] - oy) - h, 0.0)

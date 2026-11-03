@@ -31,6 +31,7 @@ class Path:
     """Polyline with arc length, heading and curvature, and a local projection."""
 
     def __init__(self, xy: np.ndarray):
+        """Arc length s, heading theta and curvature kappa at each vertex of the polyline xy (n, 2)."""
         xy = np.asarray(xy, dtype=float)
         keep = np.r_[True, np.hypot(*np.diff(xy, axis=0).T) > 1e-9]
         self.xy = xy[keep]

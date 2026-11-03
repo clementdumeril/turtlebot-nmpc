@@ -17,6 +17,7 @@ HARDWARE_MAX = {"burger": 0.22, "tb4": 0.30}  # [m/s] max_speed is clamped below
 
 
 def make_nodes(context):
+    """nmpc_node with config/<robot_model>.yaml, overridden by the launch arguments (speed capped by HARDWARE_MAX)."""
     get = lambda n: LaunchConfiguration(n).perform(context)  # noqa: E731
     share = get_package_share_directory("tb_nmpc")
     overrides = {
@@ -37,12 +38,14 @@ def make_nodes(context):
     }
     if get("max_speed"):
         v = min(float(get("max_speed")), HARDWARE_MAX[get("robot_model")] - 0.02)
-        overrides.update(v_max=v, v_ref=0.9 * v)
+        overrides.update(v_max=v, v_ref=0.9 * v)  # reference speed 10 % under the cap
+    # later parameter entries win: the overrides replace the values from the yaml
     return [Node(package="tb_nmpc", executable="nmpc_node", name="tb_nmpc", output="screen",
                  parameters=[os.path.join(share, "config", get("robot_model") + ".yaml"), overrides])]
 
 
 def generate_launch_description():
+    """Declare the launch arguments (name, default, help) and build the node in make_nodes."""
     args = [
         ("robot_model", "burger", "burger or tb4"),
         ("use_sim_time", "false", ""),

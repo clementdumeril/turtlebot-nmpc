@@ -14,6 +14,8 @@ import numpy as np
 
 @dataclass
 class TrackerParams:
+    """Tuning of the Kalman filters, the association and the predicted radius."""
+
     sigma_a: float = 1.5        # [m/s^2] white-acceleration process noise (a walking person)
     sigma_z: float = 0.05       # [m] centre measurement noise
     gate: float = 0.5           # [m] max distance between prediction and detection
@@ -28,6 +30,9 @@ class TrackerParams:
 
 @dataclass
 class Track:
+    """One tracked obstacle: state x = [x, y, vx, vy], covariance P (how unsure each value is),
+    radius r, time t of the last predict, number of detections fused (hits)."""
+
     id: int
     x: np.ndarray
     P: np.ndarray
@@ -39,32 +44,47 @@ class Track:
 
     @property
     def speed(self) -> float:
+        """Estimated speed [m/s]."""
         return float(np.hypot(self.x[2], self.x[3]))
 
 
 class Tracker:
+    """All the tracks, updated with the circles of each scan."""
+
     def __init__(self, params: TrackerParams | None = None):
+        """No tracks yet; ids count up from 0."""
         self.p = params or TrackerParams()
         self.tracks: list[Track] = []
         self._ids = count()
 
     def _predict(self, tr: Track, t: float) -> None:
+        """Kalman predict: move the track to time t at constant velocity; P grows because the
+        obstacle may have accelerated (sigma_a) while we were not looking."""
         dt = t - tr.t
         if dt <= 0:
             return
+        # x += vx dt, y += vy dt, velocity unchanged
         F = np.eye(4)
         F[0, 2] = F[1, 3] = dt
+        # How an unknown acceleration over dt moves the position (dt^2/2) and the velocity (dt)
         G = np.array([[0.5 * dt * dt, 0], [0, 0.5 * dt * dt], [dt, 0], [0, dt]])
         tr.x = F @ tr.x
         tr.P = F @ tr.P @ F.T + (self.p.sigma_a ** 2) * G @ G.T
         tr.t = t
 
     def _update(self, tr: Track, z: np.ndarray, r: float) -> None:
+        """Kalman update with a measured centre z = [x, y] (and radius r); P shrinks.
+
+        The gain K also has rows for vx, vy: if the obstacle shows up farther than predicted,
+        part of the gap goes into the velocity. That is how the velocity is estimated although
+        the lidar only measures positions.
+        """
+        # The lidar measures the position only: z = H x
         H = np.zeros((2, 4))
         H[0, 0] = H[1, 1] = 1.0
-        S = H @ tr.P @ H.T + (self.p.sigma_z ** 2) * np.eye(2)
-        K = tr.P @ H.T @ np.linalg.inv(S)
-        tr.x = tr.x + K @ (z - H @ tr.x)
+        S = H @ tr.P @ H.T + (self.p.sigma_z ** 2) * np.eye(2)  # uncertainty of the gap below
+        K = tr.P @ H.T @ np.linalg.inv(S)  # large P: trust the measurement; large sigma_z: trust the prediction
+        tr.x = tr.x + K @ (z - H @ tr.x)  # z - H x = gap between what we see and what we expected
         tr.P = (np.eye(4) - K @ H) @ tr.P
         v = np.hypot(tr.x[2], tr.x[3])
         if v > self.p.v_max:
@@ -75,8 +95,10 @@ class Tracker:
     def update(self, t: float, detections: np.ndarray) -> list[Track]:
         """Advance all tracks to time t and fuse the detections (n, 3) = [x, y, r]."""
         detections = np.asarray(detections, dtype=float).reshape(-1, 3)
+        # 1. predict every track to the scan time
         for tr in self.tracks:
             self._predict(tr, t)
+        # 2. associate: closest (track, detection) pairs first, only within the gate
         pairs = []
         for i, tr in enumerate(self.tracks):
             for j, d in enumerate(detections):
@@ -91,10 +113,12 @@ class Tracker:
             used_d.add(j)
             self._update(self.tracks[i], detections[j, :2], detections[j, 2])
             self.tracks[i].history.append(t)
+        # 3. a detection left alone starts a new track, velocity unknown (variance 1)
         for j, d in enumerate(detections):
             if j not in used_d:
                 P = np.diag([self.p.sigma_z ** 2] * 2 + [1.0, 1.0])
                 self.tracks.append(Track(next(self._ids), np.r_[d[:2], 0.0, 0.0], P, float(d[2]), t, born=t, history=[t]))
+        # 4. forget tracks not seen for max_age
         self.tracks = [tr for tr in self.tracks if t - tr.history[-1] <= self.p.max_age]
         return self.tracks
 
@@ -105,7 +129,11 @@ class Tracker:
         return tr.x[2:].copy()
 
     def predict(self, tr: Track, times: np.ndarray, use_velocity: bool = True) -> np.ndarray:
-        """Predicted circles (len(times), 3) = [x, y, r] at times measured from the track's last update."""
+        """Predicted circles (len(times), 3) = [x, y, r] at times measured from the track's last update.
+
+        Same obstacle, later: centre + velocity * time; the radius grows with the velocity
+        uncertainty times the time ahead, capped at grow_max.
+        """
         times = np.asarray(times, dtype=float)
         v = self.velocity(tr) if use_velocity else np.zeros(2)
         xy = tr.x[:2] + times[:, None] * v

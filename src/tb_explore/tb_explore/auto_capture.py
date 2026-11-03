@@ -34,11 +34,15 @@ CSV_FIELDS = ["file", "image_stamp", "tf_stamp", "tf_source",
 
 
 def stamp_to_sec(stamp) -> float:
+    """builtin_interfaces/Time as float seconds."""
     return stamp.sec + stamp.nanosec * 1e-9
 
 
 class AutoCapture(Node):
+    """Saves one camera frame and its map pose per ~/capture call, in a new run_* folder."""
+
     def __init__(self):
+        """Declare parameters, create the run folder, subscribe to the camera, offer ~/capture."""
         super().__init__("auto_capture")
         for name, default in (("image_topic", "/image_raw"), ("target_frame", "map"), ("source_frame", "base_link"),
                               ("output_dir", os.path.expanduser("~/explore_captures")), ("max_image_age", 1.0),
@@ -71,6 +75,7 @@ class AutoCapture(Node):
         self.get_logger().info(f"listening on {g('image_topic')}, saving to {self.out}")
 
     def check_camera(self):
+        """2 s timer: find the camera topic if the configured one is silent, warn if a capture waits too long."""
         # Nothing on the given topic after 3 s: switch to the live image topic if there is exactly
         # one (the lab robots publish under their name, /apple/image_raw; a run on 2 November
         # took no photo because the launch was started without image_topic:=).
@@ -93,6 +98,7 @@ class AutoCapture(Node):
                                    f"{time.monotonic() - self.pending_since:.1f} s, is the camera running?")
 
     def on_capture(self, _req, resp):
+        """~/capture: arm a capture; on_image saves a later frame. Returns at once, before the photo."""
         with self.lock:
             self.pending_since = time.monotonic()
             self.skip = self.g("skip_frames")  # frames already in flight were taken before the call
@@ -100,6 +106,10 @@ class AutoCapture(Node):
         return resp
 
     def lookup_pose(self, stamp):
+        """target_frame -> source_frame TF at the image stamp, else the latest one; returns (tf, source label).
+
+        Raises TransformException if neither is available.
+        """
         try:
             tf = self.tf_buffer.lookup_transform(self.g("target_frame"), self.g("source_frame"),
                                                  Time.from_msg(stamp), timeout=Duration(seconds=0.2))
@@ -109,11 +119,15 @@ class AutoCapture(Node):
             return tf, "latest"
 
     def on_image(self, msg: Image):
+        """Camera callback: if a capture is armed, skip skip_frames frames, then save the next one.
+
+        Writes img_NNNN.png and a poses.csv row, then publishes the new count on ~/saved.
+        """
         arrival = time.monotonic()
         self.last_arrival = arrival
-        with self.lock:
+        with self.lock:  # on_capture may run concurrently
             take = self.pending_since is not None and arrival > self.pending_since
-            if take and self.skip > 0:
+            if take and self.skip > 0:  # frame possibly exposed before the call: drop it
                 self.skip -= 1
                 take = False
             if take:
@@ -151,6 +165,7 @@ class AutoCapture(Node):
 
 
 def main():
+    """Run the auto_capture node until Ctrl-C."""
     rclpy.init()
     node = AutoCapture()
     try:

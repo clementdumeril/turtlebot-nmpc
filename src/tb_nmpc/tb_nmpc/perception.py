@@ -14,6 +14,8 @@ import numpy as np
 
 @dataclass
 class PerceptionParams:
+    """Tuning of the clustering and of the circles."""
+
     range_min: float = 0.12        # [m] drop returns closer than this (robot body, TB4 bumper)
     range_max: float = 3.0         # [m] ignore what is farther (not relevant within a 3 s horizon)
     gap_base: float = 0.12         # [m] new cluster when consecutive points are farther apart than

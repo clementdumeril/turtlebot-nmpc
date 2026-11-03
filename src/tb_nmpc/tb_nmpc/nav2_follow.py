@@ -28,7 +28,10 @@ from .reference import anchored
 
 
 class Nav2Follow(Node):
+    """Client of Nav2's FollowPath action: sends the path ahead of the robot, piece by piece."""
+
     def __init__(self):
+        """Parameters, action client, odometry subscription, publishers, services, timers."""
         super().__init__("nav2_follow")
         for name, default in (("odom_topic", "/odom"), ("path_size", 1.5), ("path_shape", "eight"), ("laps", 1.0), ("window_min", 2.5), ("window_max", 4.0),
                               ("rate", 2.0), ("controller_id", "FollowPath"), ("goal_checker_id", "general_goal_checker"),
@@ -55,11 +58,13 @@ class Nav2Follow(Node):
         self.goal_handle = None
 
     def on_odom(self, msg):
+        """Store the current pose and the odometry frame."""
         p = msg.pose.pose
         self.frame = msg.header.frame_id or "odom"
         self.pose = (p.position.x, p.position.y, yaw_of(p.orientation))
 
     def on_start(self, _req, resp):
+        """~/start: build the path from the current pose and send the first segment."""
         if self.pose is None or not self.client.wait_for_server(timeout_sec=5.0):
             resp.success, resp.message = False, "no odometry or no follow_path action server"
             return resp
@@ -74,6 +79,7 @@ class Nav2Follow(Node):
         return resp
 
     def on_stop(self, _req, resp):
+        """~/stop: cancel the current FollowPath goal."""
         self.running = False
         if self.goal_handle is not None:
             self.goal_handle.cancel_goal_async()
@@ -81,6 +87,7 @@ class Nav2Follow(Node):
         return resp
 
     def to_msg(self, xy, theta=None):
+        """Points (n, 2) and optional headings as a nav_msgs/Path in the odometry frame."""
         m = PathMsg()
         m.header.frame_id = self.frame
         m.header.stamp = self.get_clock().now().to_msg()
@@ -94,6 +101,7 @@ class Nav2Follow(Node):
         return m
 
     def track(self):
+        """Every 0.1 s: progress along the path and cross-track error on ~/stats; finish at the end."""
         if not self.running or self.pose is None:
             return
         self.s, cte = self.path.project(self.pose[:2], self.s, back=0.1, ahead=0.3)
@@ -103,6 +111,7 @@ class Nav2Follow(Node):
             self.finish()
 
     def tick(self):
+        """At `rate` Hz: send the next segment of the path as a new FollowPath goal."""
         if not self.running or self.final_sent:
             return
         # Segment of window_min..window_max metres, ending at the point farthest from the robot in
@@ -131,6 +140,7 @@ class Nav2Follow(Node):
         fut.add_done_callback(self.on_goal)
 
     def on_goal(self, fut):
+        """Goal accepted: keep its handle; for the last segment, wait for its result."""
         gh = fut.result()
         if gh is None or not gh.accepted:
             return
@@ -139,6 +149,7 @@ class Nav2Follow(Node):
             gh.get_result_async().add_done_callback(self.on_final_result)
 
     def on_final_result(self, fut):
+        """Last segment done: finish if it succeeded, else send it again."""
         res = fut.result()
         if res is not None and res.status == GoalStatus.STATUS_SUCCEEDED:
             self.finish()
@@ -146,6 +157,7 @@ class Nav2Follow(Node):
             self.final_sent = False  # aborted (blocked, no progress): keep sending
 
     def finish(self):
+        """Stop and publish /follow/done = true."""
         if self.running:
             self.running = False
             self.done_pub.publish(Bool(data=True))
@@ -153,6 +165,7 @@ class Nav2Follow(Node):
 
 
 def main():
+    """Run the node."""
     rclpy.init()
     node = Nav2Follow()
     try:

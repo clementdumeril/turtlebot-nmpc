@@ -33,15 +33,20 @@ from .grid import Grid, plan_to_frontier, plan_to_point
 
 
 def yaw_of(q) -> float:
+    """Yaw [rad] of a quaternion message."""
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
 def wrap(a: float) -> float:
+    """Angle wrapped to [-pi, pi]."""
     return math.atan2(math.sin(a), math.cos(a))
 
 
 class Explorer(Node):
+    """Frontier-exploration state machine: IDLE -> SPIN -> PLAN -> ALIGN -> DRIVE -> SPIN ... -> HOME -> DONE."""
+
     def __init__(self):
+        """Declare parameters, set up subscriptions, publishers, service clients and the 10 Hz tick."""
         super().__init__("explorer")
         for name, default in (
             ("map_topic", "/map"), ("map_frame", "map"), ("base_frame", "base_link"), ("odom_topic", "/odom"),
@@ -105,24 +110,31 @@ class Explorer(Node):
 
     # ---------- inputs ----------
     def now(self) -> float:
+        """Node clock time [s] (sim time when use_sim_time)."""
         return self.get_clock().now().nanoseconds * 1e-9
 
     def on_map(self, msg: OccupancyGrid):
+        """Keep the latest /map as a Grid (the origin rotation is assumed to be zero)."""
         info = msg.info
         data = np.asarray(msg.data, dtype=np.int16).reshape(info.height, info.width)
         self.grid = Grid(data, info.resolution, info.origin.position.x, info.origin.position.y)
 
     def on_odom(self, msg: Odometry):
+        """Latest odometry yaw [rad], used to track the turns in place (SPIN and ALIGN)."""
         self.yaw_odom = yaw_of(msg.pose.pose.orientation)
 
     def on_done(self, msg: Bool):
+        """/follow/done from the NMPC. Ignored until done_after, so a latched True from the previous
+        path does not end the new one immediately."""
         if msg.data and self.done_after is not None and self.now() > self.done_after:
             self.done_flag = True
 
     def on_saved(self, msg: Int32):
+        """Photo count from /auto_capture/saved; a rise means the last requested photo is on disk."""
         self.saved = msg.data
 
     def robot_pose(self):
+        """(x, y, yaw) of base_link in the map frame from the latest TF, or None if not available."""
         try:
             tf = self.tf_buffer.lookup_transform(self.g("map_frame"), self.g("base_frame"), Time(), Duration(seconds=0.0))
         except Exception:  # noqa: BLE001
@@ -132,10 +144,15 @@ class Explorer(Node):
 
     # ---------- services ----------
     def _autostart(self):
+        """Timer (autostart:=true): start once the map, odometry and TF are all available, only once."""
         if self.state == "IDLE" and self.grid is not None and self.robot_pose() is not None and self.t_start == 0.0:
             self.on_start(None, Trigger.Response())
 
     def on_start(self, _req, resp):
+        """~/start: record home, reset the blacklist and goal count, and begin with a capture spin.
+
+        Fails with the list of missing inputs if /map, /odom or the map -> base_link TF is not there yet.
+        """
         pose = self.robot_pose()
         if pose is None or self.grid is None or self.yaw_odom is None:
             missing = [n for n, ok in (("/map", self.grid is not None), ("/odom", self.yaw_odom is not None),
@@ -153,6 +170,7 @@ class Explorer(Node):
         return resp
 
     def on_stop(self, _req, resp):
+        """~/stop: stop the NMPC and the robot, go back to IDLE."""
         self.stop_nmpc()
         self.set_state("IDLE")
         self.cmd(0.0, 0.0)
@@ -160,6 +178,11 @@ class Explorer(Node):
         return resp
 
     def setup_cmd_pub(self):
+        """Create the cmd_vel publisher once, as Twist or TwistStamped.
+
+        With cmd_vel_type auto, use the type the base already subscribes with; if nobody
+        subscribes yet, guess from ROS_DISTRO (Twist on Humble and Iron, stamped after).
+        """
         if self.cmd_pub is not None:
             return
         topic, kind = self.g("cmd_vel_topic"), self.g("cmd_vel_type")
@@ -171,6 +194,7 @@ class Explorer(Node):
         self.cmd_pub = self.create_publisher(TwistStamped if self.stamped else Twist, topic, 10)
 
     def cmd(self, v: float, w: float):
+        """Publish v [m/s], w [rad/s] on cmd_vel; does nothing before the first start."""
         if self.cmd_pub is None:
             return
         tw = Twist()
@@ -185,11 +209,13 @@ class Explorer(Node):
             self.cmd_pub.publish(tw)
 
     def stop_nmpc(self):
+        """Ask the NMPC to stop following its path (non-blocking, skipped if the service is down)."""
         if self.stop_cli.service_is_ready():
             self.stop_cli.call_async(Trigger.Request())
 
     # ---------- state machine ----------
     def set_state(self, s: str):
+        """Switch state, restart the state timer t_state, and publish the name on ~/state."""
         self.state = s
         self.t_state = self.now()
         self.state_pub.publish(String(data=s))
@@ -204,6 +230,10 @@ class Explorer(Node):
         self.spin_phase, self.t_phase = "settle", self.now()   # first photo where we stand, once still
 
     def tick(self):
+        """10 Hz state-machine step: enforce max_time, then run tick_<state> (tick_spin, tick_plan ...).
+
+        Nothing runs in IDLE and DONE; once the budget is used up, every state but HOME goes home.
+        """
         if self.state in ("IDLE", "DONE"):
             return
         if self.now() - self.t_start > self.g("max_time") and self.state != "HOME":
@@ -213,14 +243,20 @@ class Explorer(Node):
         getattr(self, "tick_" + self.state.lower())()
 
     def tick_spin(self):
+        """SPIN: cycle settle -> shoot -> wait -> rotate for each of the captures_per_spin headings.
+
+        Headings are 360 / n degrees apart from the yaw at the start of the spin. After the last
+        photo the state goes to spin_after (PLAN). A missing camera never blocks the spin.
+        """
         n = self.g("captures_per_spin")
         if self.spin_phase == "rotate":
             target = self.spin_yaw0 + self.spin_k * 2 * math.pi / n
             err = wrap(target - self.yaw_odom)
-            if abs(err) < 0.04 or self.now() - self.t_phase > 8.0:
+            if abs(err) < 0.04 or self.now() - self.t_phase > 8.0:  # reached, or gave up after 8 s
                 self.cmd(0.0, 0.0)
                 self.spin_phase, self.t_phase = "settle", self.now()
             else:
+                # proportional turn rate, at least 0.25 rad/s, at most spin_speed
                 w = math.copysign(min(self.g("spin_speed"), max(0.25, 1.5 * abs(err))), err)
                 self.cmd(0.0, w)
         elif self.spin_phase == "settle":
@@ -251,7 +287,11 @@ class Explorer(Node):
                     self.spin_phase, self.t_phase = "rotate", self.now()
 
     def tick_plan(self):
-        if self.no_frontier and self.now() - self.t_state < 1.5:
+        """PLAN: pick the best reachable frontier on the current map and start driving to it.
+
+        No frontier is accepted as final only after 3 tries, 1.5 s apart (new maps); then go home.
+        """
+        if self.no_frontier and self.now() - self.t_state < 1.5:  # wait for a newer map between retries
             return
         pose = self.robot_pose()
         if pose is None or self.grid is None:
@@ -290,10 +330,13 @@ class Explorer(Node):
         pose = self.robot_pose()
         k = min(len(xy) - 1, 1)
         heading = math.atan2(xy[k, 1] - pose[1], xy[k, 0] - pose[0])
+        # the turn is measured in the map frame but tracked with the odometry yaw
         self.align_target = self.yaw_odom + wrap(heading - pose[2])
         self.set_state("ALIGN")
 
     def tick_align(self):
+        """ALIGN: turn in place to within 0.15 rad of the path (10 s max), then publish the path
+        to the NMPC and go to drive_state (DRIVE or HOME)."""
         err = wrap(self.align_target - self.yaw_odom)
         if abs(err) > 0.15 and self.now() - self.t_state < 10.0:
             self.cmd(0.0, math.copysign(min(self.g("spin_speed"), max(0.25, 1.5 * abs(err))), err))
@@ -301,10 +344,11 @@ class Explorer(Node):
         self.cmd(0.0, 0.0)
         self.publish_path(self.path_xy)
         self.done_flag = False
-        self.done_after = self.now() + 0.3
+        self.done_after = self.now() + 0.3  # ignore /follow/done messages about the previous path
         self.set_state(self.drive_state)
 
     def capture_on_the_way(self):
+        """Request a photo every capture_spacing metres driven, for parallax between viewpoints."""
         spacing = self.g("capture_spacing")
         pose = self.robot_pose()
         if spacing <= 0 or pose is None or not self.capture_cli.service_is_ready():
@@ -314,10 +358,12 @@ class Explorer(Node):
             self.last_shot = pose[:2]
 
     def tick_drive(self):
+        """DRIVE: the NMPC follows the path. On /follow/done spin and capture (or plan again);
+        after goal_timeout stop the NMPC and replan. Either way the goal is blacklisted."""
         self.capture_on_the_way()
         if self.done_flag:
             self.n_goals += 1
-            self.blacklist.append(self.goal)
+            self.blacklist.append(self.goal)  # reached: do not pick a frontier here again
             if self.g("capture_at_goals"):
                 self.begin_spin("PLAN")
             else:
@@ -329,6 +375,7 @@ class Explorer(Node):
             self.set_state("PLAN")
 
     def go_home_or_finish(self):
+        """Drive back to the start pose if return_home, it is over 0.3 m away and reachable; else finish."""
         pose = self.robot_pose()
         if self.g("return_home") and pose is not None and self.home is not None and self.grid is not None \
                 and math.hypot(pose[0] - self.home[0], pose[1] - self.home[1]) > 0.3:
@@ -342,10 +389,12 @@ class Explorer(Node):
         self.finish()
 
     def tick_home(self):
+        """HOME: finish when the NMPC reports done or after goal_timeout."""
         if self.done_flag or self.now() - self.t_state > self.g("goal_timeout"):
             self.finish()
 
     def finish(self):
+        """Stop the NMPC and the robot, log the summary, go to DONE."""
         self.stop_nmpc()
         self.cmd(0.0, 0.0)
         self.get_logger().info(f"exploration finished: {self.n_goals} goals in {self.now() - self.t_start:.0f} s")
@@ -353,6 +402,7 @@ class Explorer(Node):
 
     # ---------- output ----------
     def publish_path(self, xy):
+        """Publish (n, 2) map-frame points as a nav_msgs/Path on path_topic (orientations left at identity)."""
         m = PathMsg()
         m.header.frame_id = self.g("map_frame")
         m.header.stamp = self.get_clock().now().to_msg()
@@ -365,6 +415,8 @@ class Explorer(Node):
         self.path_pub.publish(m)
 
     def publish_markers(self, clusters, goal):
+        """RViz markers on ~/frontiers: frontier cells as blue points, the goal as an orange sphere
+        (deleted when goal is None)."""
         arr = MarkerArray()
         mk = Marker()
         mk.header.frame_id = self.g("map_frame")
@@ -390,6 +442,10 @@ class Explorer(Node):
 
 
 def main():
+    """Spin the explorer; on Ctrl-C or SIGTERM send a few zero velocities before shutting down.
+
+    rclpy's own signal handlers are disabled so the node is still alive to publish the stop.
+    """
     try:
         from rclpy.signals import SignalHandlerOptions
         rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
@@ -398,6 +454,7 @@ def main():
     node = Explorer()
 
     def on_term(*_):
+        """Turn SIGTERM (sent by ros2 launch) into a KeyboardInterrupt."""
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, on_term)

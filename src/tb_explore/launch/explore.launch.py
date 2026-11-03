@@ -17,10 +17,12 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-HARDWARE_MAX = {"burger": 0.22, "tb4": 0.30}
+HARDWARE_MAX = {"burger": 0.22, "tb4": 0.30}  # [m/s] max_speed is clamped below these
 
 
 def make_nodes(context):
+    """Mapper (cartographer or simple_mapper), NMPC in path_source=topic mode, explorer, and
+    optionally auto_capture and RViz, all with the launch arguments resolved."""
     get = lambda n: LaunchConfiguration(n).perform(context)  # noqa: E731
     sim = get("use_sim_time") == "true"
     nodes = []
@@ -69,6 +71,7 @@ def make_nodes(context):
 
 
 def generate_launch_description():
+    """Declare the launch arguments (name, default, help) and build the nodes in make_nodes."""
     args = [
         ("mapper", "cartographer", "cartographer (robot) or simple (odometry only, Webots)"),
         ("use_sim_time", "false", ""),

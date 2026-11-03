@@ -32,6 +32,11 @@ FAR = 1.0e3  # position of unused obstacle slots
 
 @dataclass
 class OcpConfig:
+    """Settings of the optimal control problem: horizon, obstacle slots, limits, weights.
+
+    A dataclass: Python writes the constructor, OcpConfig(N=20) changes one field.
+    """
+
     N: int = 30                 # stages
     dt: float = 0.1             # [s] stage length (3 s horizon)
     M: int = 6                  # obstacle slots per stage
@@ -52,6 +57,11 @@ class OcpConfig:
 
 
 def build_ocp(cfg: OcpConfig):
+    """Describe the problem to acados (model, cost, constraints, solver options).
+
+    The variables below are CasADi symbols, not numbers: the formulas written with them are
+    turned into C code by acados.
+    """
     import casadi as ca
     from acados_template import AcadosModel, AcadosOcp
 
@@ -64,11 +74,14 @@ def build_ocp(cfg: OcpConfig):
     model = AcadosModel()
     model.name = "unicycle"
     model.x, model.u, model.p = x, u, p
+    # Continuous dynamics x' = f(x, u); acados discretises it over dt with RK4 (options below)
     model.f_expl_expr = ca.vertcat(v * ca.cos(th), v * ca.sin(th), w, a, al)
     model.xdot = ca.SX.sym("xdot", NX)
     model.f_impl_expr = model.xdot - model.f_expl_expr
+    # y compared with yref at every stage (weights W), y_e at the last one (W_e, no input there)
     model.cost_y_expr = ca.vertcat(px, py, ca.cos(th), ca.sin(th), v, w, a, al)
     model.cost_y_expr_e = ca.vertcat(px, py, ca.cos(th), ca.sin(th), v)
+    # One constraint per obstacle slot: distance to its centre minus its radius >= 0
     h = ca.vertcat(*[ca.sqrt((px - p[3 * j]) ** 2 + (py - p[3 * j + 1]) ** 2 + 1e-6) - p[3 * j + 2]
                      for j in range(cfg.M)])
     model.con_h_expr = h
@@ -98,6 +111,8 @@ def build_ocp(cfg: OcpConfig):
     ocp.constraints.lbx_e = np.array([cfg.v_min, -cfg.w_max])
     ocp.constraints.ubx_e = np.array([cfg.v_max, cfg.w_max])
 
+    # Soft obstacle constraints: a violation s costs slack_l1 * s + slack_l2 * s^2 instead of
+    # making the problem infeasible
     big = 1.0e4
     for suffix in ("", "_e"):
         setattr(ocp.constraints, "lh" + suffix, np.zeros(cfg.M))
@@ -124,6 +139,7 @@ class Nmpc:
     """Thin wrapper around the generated solver: set reference and obstacles, solve, read back."""
 
     def __init__(self, cfg: OcpConfig, code_dir: str | None = None, verbose: bool = False):
+        """Generate and compile the solver, or reuse it from ~/.cache/tb_nmpc if N, dt, M are unchanged."""
         from acados_template import AcadosOcpSolver
 
         self.cfg = cfg
@@ -142,6 +158,7 @@ class Nmpc:
         self.initialized = False
 
     def set_limits(self, v_min, v_max, w_max, a_max, alpha_max) -> None:
+        """Change the bounds on (a, alpha) and (v, omega) at run time, without recompiling."""
         s = self.solver
         for k in range(self.cfg.N):
             s.constraints_set(k, "lbu", np.array([-a_max, -alpha_max]))
@@ -194,4 +211,5 @@ class Nmpc:
         return status, t
 
     def reset(self) -> None:
+        """Cold start at the next solve (new path, or after a solver failure)."""
         self.initialized = False

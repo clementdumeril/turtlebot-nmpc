@@ -19,8 +19,11 @@ ROBOTS = {  # the same caps as config/<robot>.yaml
 
 
 def make_nodes(context):
+    """controller_server with config/nav2_<controller>.yaml rewritten for the robot and arguments,
+    its lifecycle manager (autostart), and the nav2_follow node that feeds it the path."""
     get = lambda n: LaunchConfiguration(n).perform(context)  # noqa: E731
     share = get_package_share_directory("tb_nmpc")
+    # RewrittenYaml replaces every parameter with one of these names, wherever it sits in the yaml
     rewrites = dict(ROBOTS[get("robot_model")])
     if get("max_speed"):
         v = min(float(get("max_speed")), {"burger": 0.20, "tb4": 0.28}[get("robot_model")])
@@ -46,6 +49,7 @@ def make_nodes(context):
 
 
 def generate_launch_description():
+    """Declare the launch arguments (name, default, help) and build the nodes in make_nodes."""
     args = [
         ("controller", "mppi", "mppi or rpp"),
         ("robot_model", "burger", "burger or tb4"),

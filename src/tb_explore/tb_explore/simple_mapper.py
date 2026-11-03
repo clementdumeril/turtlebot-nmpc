@@ -23,11 +23,15 @@ from .mapping import LogOddsMap
 
 
 def yaw_of(q) -> float:
+    """Yaw [rad] of a quaternion message."""
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
 class SimpleMapper(Node):
+    """Odometry-only mapper: LogOddsMap fed by /scan at the interpolated /odom pose."""
+
     def __init__(self):
+        """Declare parameters, broadcast the static map -> odom identity, set up /map and the inputs."""
         super().__init__("simple_mapper")
         for name, default in (("size", 12.0), ("resolution", 0.05), ("max_range", 3.0), ("map_frame", "map"),
                               ("odom_frame", "odom"), ("base_frame", "base_link"), ("scan_topic", "/scan"),
@@ -54,6 +58,7 @@ class SimpleMapper(Node):
         self.create_timer(g("publish_period"), self.publish)
 
     def on_odom(self, msg):
+        """Store (t, x, y, yaw) in the last-200 history; the first message centres the map on the robot."""
         p = msg.pose.pose
         t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
         self.odom.append((t, p.position.x, p.position.y, yaw_of(p.orientation)))
@@ -61,15 +66,20 @@ class SimpleMapper(Node):
             self.map = LogOddsMap(self.g("size"), self.g("resolution"), (p.position.x, p.position.y))
 
     def pose_at(self, t):
+        """Odometry (x, y, yaw) at time t [s], interpolated linearly; the newest pose if t is out of range."""
         h = list(self.odom)
         for a, b in zip(h[:-1], h[1:]):
             if a[0] <= t <= b[0]:
                 f = (t - a[0]) / max(b[0] - a[0], 1e-9)
-                dyaw = math.atan2(math.sin(b[3] - a[3]), math.cos(b[3] - a[3]))
+                dyaw = math.atan2(math.sin(b[3] - a[3]), math.cos(b[3] - a[3]))  # shortest way across +-pi
                 return a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2]), a[3] + f * dyaw
         return h[-1][1:]
 
     def on_scan(self, msg: LaserScan):
+        """Integrate one scan: lidar pose = odometry pose at the scan stamp composed with the lidar mount.
+
+        The mount (base_frame -> lidar frame) is read from TF once, with laser_x/y/yaw as fallback.
+        """
         if self.map is None or not self.odom:
             return
         if self.laser is None:
@@ -88,11 +98,13 @@ class SimpleMapper(Node):
         x, y, yaw = self.pose_at(Time.from_msg(msg.header.stamp).nanoseconds * 1e-9)
         lx, ly, lyaw = self.laser
         c, s = math.cos(yaw), math.sin(yaw)
-        sensor = (x + c * lx - s * ly, y + s * lx + c * ly, yaw + lyaw)
+        # rotate the mount offset by the robot yaw and add it to the robot position
+        sensor =(x + c * lx - s * ly, y + s * lx + c * ly, yaw + lyaw)
         self.map.update(sensor, msg.ranges, msg.angle_min, msg.angle_increment, max(msg.range_min, 0.1),
                         max_range=min(self.g("max_range"), msg.range_max))
 
     def publish(self):
+        """Timer: publish the map as a latched OccupancyGrid on /map in map_frame."""
         if self.map is None:
             return
         g = self.map.grid()
@@ -108,6 +120,7 @@ class SimpleMapper(Node):
 
 
 def main():
+    """Run the simple_mapper node until Ctrl-C."""
     rclpy.init()
     node = SimpleMapper()
     try:

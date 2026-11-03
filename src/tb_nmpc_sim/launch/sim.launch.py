@@ -34,6 +34,8 @@ def windows_host_ip():
 
 
 def controller_nodes(context):
+    """Nodes for the chosen controller: nmpc_node (with or without prediction), the Nav2 launch
+    for mppi / rpp on the 1.5 m figure eight, or nothing for none."""
     controller = LaunchConfiguration("controller").perform(context)
     nmpc_share = get_package_share_directory("tb_nmpc")
     if controller in ("nmpc", "nmpc_nopred"):
@@ -49,12 +51,16 @@ def controller_nodes(context):
 
 
 def generate_launch_description():
+    """Webots with the chosen world, robot_state_publisher, the TurtleBot driver and its ros2_control
+    spawners, and the controller; the whole launch shuts down when Webots exits."""
     share = get_package_share_directory("tb_nmpc_sim")
     host_ip = os.environ.get("WEBOTS_HOST_IP") or windows_host_ip()
     if host_ip:
+        # webots_ros2 asks this function where Webots runs: point it at the right host
         webots_utils.get_wsl_ip_address = lambda: host_ip
 
     def set_scenario(context):
+        """Export the scenario argument as TB_SCENARIO."""
         # Read by the scene_supervisor plugin inside the driver process.
         os.environ["TB_SCENARIO"] = LaunchConfiguration("scenario").perform(context)
         return []
@@ -76,6 +82,7 @@ def generate_launch_description():
                      arguments=["0", "0", "0", "0", "0", "0", "base_link", "base_footprint"])
 
     def robot_nodes(context):
+        """Webots driver for TurtleBot3Burger, then the diff-drive and joint-state spawners once it connects."""
         # The room world has a camera on the robot: its URDF declares it.
         world = LaunchConfiguration("world").perform(context)
         urdf_file = "turtlebot_cam.urdf" if world == "room.wbt" else "turtlebot.urdf"

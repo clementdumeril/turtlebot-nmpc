@@ -38,12 +38,17 @@ from .tracker import Tracker, TrackerParams
 
 
 def yaw_of(q) -> float:
+    """Yaw angle [rad] of a quaternion message."""
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
 class NmpcNode(Node):
+    """The controller node: lidar -> circles -> Kalman tracks -> predicted obstacles -> NMPC -> /cmd_vel."""
+
     def __init__(self):
+        """Declare the parameters, build the solver, then the subscriptions, publishers, services, timer."""
         super().__init__("tb_nmpc")
+        # Short names: P("x", default) declares the ROS parameter x, g("x") reads its value
         P = self.declare_parameter
         P("robot_model", "burger")
         P("cmd_vel_topic", "/cmd_vel")
@@ -109,10 +114,14 @@ class NmpcNode(Node):
         self._stopping = False
         self.laser_tf = None
 
+        # TF: the listener subscribes to /tf and /tf_static and stores the transforms in the
+        # buffer; laser_offset() then asks the buffer where the lidar sits on the robot.
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+        # Inputs: each message calls its callback (on_odom, on_scan)
         self.create_subscription(Odometry, g("odom_topic"), self.on_odom, qos_profile_sensor_data)
         self.create_subscription(LaserScan, g("scan_topic"), self.on_scan, qos_profile_sensor_data)
+        # Outputs. /cmd_vel is created on start, once we know if the robot wants Twist or TwistStamped.
         self.cmd_pub = None
         self.stats_pub = self.create_publisher(Float64MultiArray, "~/stats", 10)
         self.tracks_pub = self.create_publisher(Float64MultiArray, "~/tracks", 10)
@@ -142,7 +151,10 @@ class NmpcNode(Node):
 
     # ---------- inputs ----------
     def on_odom(self, msg: Odometry):
+        """Store the pose and velocity with their time stamp (history used to place each scan)."""
         p = msg.pose.pose
+        # Frame of the odometry ("odom" if the message leaves it empty): our paths and markers are
+        # published in it so RViz draws them in the right place.
         self.odom_frame = msg.header.frame_id or "odom"
         t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
         self.odom_hist.append((t, p.position.x, p.position.y, yaw_of(p.orientation),
@@ -166,6 +178,7 @@ class NmpcNode(Node):
         return h[-1][1:4]
 
     def laser_offset(self, frame: str):
+        """Lidar mounting (x, y, yaw) on the robot, read once from TF, else the laser_* parameters."""
         if self.laser_tf is None:
             try:
                 tf = self.tf_buffer.lookup_transform(self.g("base_frame"), frame, Time(), Duration(seconds=0.0))
@@ -178,6 +191,7 @@ class NmpcNode(Node):
         return self.laser_tf
 
     def on_scan(self, msg: LaserScan):
+        """Each scan: lidar pose at the scan time, circles (perception), Kalman update, ~/tracks."""
         t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
         pose = self.pose_at(t)
         if pose is None:
@@ -202,10 +216,12 @@ class NmpcNode(Node):
 
     # ---------- services ----------
     def _autostart_once(self):
+        """Start on its own once odometry arrives (autostart:=true, used by the simulation)."""
         if not self.running and self.odom_hist and self.path is None:
             self.on_start(None, Trigger.Response())
 
     def on_start(self, _req, resp):
+        """~/start: build the figure eight or circle from the current pose and start following it."""
         if not self.odom_hist:
             resp.success, resp.message = False, "no odometry yet"
             return resp
@@ -256,12 +272,14 @@ class NmpcNode(Node):
         self.get_logger().info(f"following a received {self.path.length:.2f} m path")
 
     def on_stop(self, _req, resp):
+        """~/stop: zero command and stop following."""
         self.running = False
         self.publish_cmd(0.0, 0.0)
         resp.success, resp.message = True, "stopped"
         return resp
 
     def setup_cmd_pub(self):
+        """Create the /cmd_vel publisher with the type the robot listens to (Twist on Humble, TwistStamped on Jazzy)."""
         if self.cmd_pub is not None:
             return
         topic, kind = self.g("cmd_vel_topic"), self.g("cmd_vel_type")
@@ -279,6 +297,7 @@ class NmpcNode(Node):
         self.cmd_pub = self.create_publisher(TwistStamped if self.stamped else Twist, topic, 10)
 
     def publish_cmd(self, v: float, w: float):
+        """Send v [m/s], omega [rad/s] on /cmd_vel."""
         if self.cmd_pub is None:
             return
         tw = Twist()
@@ -320,9 +339,11 @@ class NmpcNode(Node):
         return obs
 
     def local_now(self) -> float:
+        """This computer's clock [s]."""
         return self.get_clock().now().nanoseconds * 1e-9
 
     def step(self):
+        """Timer every dt: watchdog on odometry and lidar, then one control step."""
         if not self.running or not self.odom_hist:
             return
         now = self.local_now()
@@ -348,6 +369,7 @@ class NmpcNode(Node):
             self.get_logger().error(f"control step failed, stopped: {e!r}")
 
     def control(self, now: float):
+        """One NMPC step: progress on the path, obstacles, reference, solve, safety stop, publish."""
         t_odom, x, y, yaw, v_odom, w_odom = self.odom_hist[-1]
         if self.g("velocity_state") == "odom":
             v0, w0 = v_odom, w_odom
@@ -408,6 +430,7 @@ class NmpcNode(Node):
 
     # ---------- visualisation ----------
     def publish_path(self, pub, xy):
+        """Publish points (n, 2) as a nav_msgs/Path in the odometry frame (for RViz)."""
         m = PathMsg()
         m.header.frame_id = self.odom_frame
         m.header.stamp = self.get_clock().now().to_msg()
@@ -420,6 +443,7 @@ class NmpcNode(Node):
         pub.publish(m)
 
     def publish_markers(self, obs):
+        """Obstacle circles as cylinders: now (opaque) and at the end of the horizon (faint)."""
         arr = MarkerArray()
         stamp = self.get_clock().now().to_msg()
         for j in range(self.cfg.M):
@@ -440,6 +464,7 @@ class NmpcNode(Node):
 
 
 def main():
+    """Run the node; on Ctrl-C or SIGTERM send a few zero commands before exiting."""
     # Keep the ROS context alive on Ctrl-C so the zero command below still goes out (with
     # rclpy's own handler the context is already shut down and the publish is lost).
     try:
@@ -450,6 +475,7 @@ def main():
     node = NmpcNode()
 
     def on_term(*_):  # ros2 launch escalates to SIGTERM 5 s after Ctrl-C
+        """Treat SIGTERM like Ctrl-C so the zero command below still goes out."""
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, on_term)

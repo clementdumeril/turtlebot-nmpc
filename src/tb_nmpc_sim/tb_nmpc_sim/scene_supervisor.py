@@ -15,16 +15,19 @@ from std_msgs.msg import Float64MultiArray, String
 
 from tb_nmpc_sim import scenarios
 
-HIDDEN = (40.0, 40.0)
+HIDDEN = (40.0, 40.0)  # [m] parking spot outside the arena for unused obstacles and the gone pedestrian
 
 
 class SceneSupervisor:
+    """webots_ros2 plugin: the driver calls init once, then step at every simulation step."""
+
     def init(self, webots_node, properties):
+        """Place OBS1/OBS2 for the scenario (or hide them), put the pedestrian at its start, create the ROS node."""
         self.robot = webots_node.robot
         self.scenario = os.environ.get("TB_SCENARIO", "clear")
         try:
             rclpy.init(args=None)
-        except RuntimeError:
+        except RuntimeError:  # already initialised in this driver process
             pass
         self.node = rclpy.create_node("scene_supervisor")
         self.pub = self.node.create_publisher(Float64MultiArray, "/sim/ground_truth", 10)
@@ -48,11 +51,13 @@ class SceneSupervisor:
                                     f"pedestrian {'yes' if self.ped else 'no'}")
 
     def set_ped(self, xy):
+        """Move the PED node to (x, y), keeping its height."""
         if self.ped_node is not None:
             f = self.ped_node.getField("translation")
             f.setSFVec3f([float(xy[0]), float(xy[1]), f.getSFVec3f()[2]])
 
     def on_record(self, msg):
+        """/sim/record: a file name starts a 1280x720 Webots movie, an empty string stops it."""
         if msg.data:
             self.robot.movieStartRecording(msg.data, 1280, 720, 0, 90, 1, False)
             self.node.get_logger().info(f"recording {msg.data}")
@@ -60,10 +65,13 @@ class SceneSupervisor:
             self.robot.movieStopRecording()
 
     def step(self):
+        """Per simulation step: track the robot's progress s along the path, run the pedestrian
+        (waiting -> walking once s passes the trigger -> gone past its end point), and publish
+        /sim/ground_truth."""
         rclpy.spin_once(self.node, timeout_sec=0)
         t = self.robot.getTime()
         x, y, _ = self.me.getPosition()
-        R = self.me.getOrientation()
+        R = self.me.getOrientation()  # 3x3 rotation matrix, row-major
         yaw = math.atan2(R[3], R[0])
         self.s, _ = self.path.project((x, y), self.s)
         vel = np.zeros(2)
@@ -74,7 +82,7 @@ class SceneSupervisor:
             if self.ped_state == 1:
                 self.ped_pos = np.asarray(start) + v * (t - self.ped_t0)
                 vel = v
-                if np.dot(self.ped_pos - end, v) >= 0:
+                if np.dot(self.ped_pos - end, v) >= 0:  # walked past the end point
                     self.ped_state, self.ped_pos = 2, np.array(HIDDEN)
                 self.set_ped(self.ped_pos)
         self.pub.publish(Float64MultiArray(data=[t, x, y, yaw, float(self.ped_pos[0]), float(self.ped_pos[1]),
