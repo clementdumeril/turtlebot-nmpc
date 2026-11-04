@@ -1,19 +1,23 @@
-# TurtleBot NMPC with lidar obstacle prediction, against Nav2 MPPI
+# TurtleBot NMPC: lidar obstacle prediction against Nav2 MPPI
 
-![360° panorama of the lab, stitched from 13 photos the TurtleBot took on its own while exploring, using its own heading](results/explore_2026-11-02c/panoramas/pano_0.jpg)
-
-An acados NMPC for a TurtleBot3 that predicts where the obstacles seen by its 2D lidar will be over the next 3 s and plans around them. In Webots it avoided a person crossing at 0.5 m/s in 6 of 7 runs, while Nav2's MPPI made contact in all 3 of its runs. On the lab robot it follows a 0.5 m circle to 1.0 cm and drives an autonomous exploration.
+[Simulation results](results/sim_2026-10-30/README.md) · [Real-robot runs](results/real_2026-11-01/README.md) · [Formulation](docs/FORMULATION.md) · [Exploration](docs/EXPLORATION.md) · [Checks and reproduction](docs/REPRODUCING.md)
 
 <p>
-<img src="docs/figures/real_figure_eight.webp" width="38%" alt="The real TurtleBot3 driving a figure eight with the NMPC in the C106A lab, phone video at 2.5x speed">
-<img src="docs/figures/crossing_nmpc_vs_mppi.gif" width="60%" alt="Webots ground truth, person crossing at 0.5 m/s: the NMPC slows and passes behind them, Nav2 MPPI keeps going and is hit">
+<img src="docs/figures/crossing_nmpc_vs_mppi.gif" width="60%" alt="Webots, person crossing at 0.5 m/s: the NMPC passes behind them, Nav2 MPPI is hit">
+<img src="docs/figures/real_figure_eight.webp" width="38%" alt="The lab TurtleBot3 driving a figure eight with the NMPC">
 </p>
+
+*Left: Webots ground truth, person crossing at 0.5 m/s; the NMPC slows and passes behind, MPPI is hit. Right: the lab TurtleBot3 on a figure eight with the same controller (phone video, 2.5x).*
+
+An acados NMPC for a TurtleBot3 that tracks the obstacles seen by its 2D lidar, predicts where they will be over the next 3 s and plans around them. In Webots it avoided a person crossing at 0.5 m/s in 6 of 7 runs, where Nav2's MPPI made contact in 3 of 3. On the lab robot it tracks a 0.5 m circle to 1.0 and 1.9 cm RMS (odometry, 2 runs) and drives a 5 min 30 s autonomous exploration.
+
+![Overview: lidar and reference in, perception and Kalman tracker, NMPC on predicted circles, TurtleBot3; results in Webots and on the lab robot](docs/figures/overview.png)
 
 A personal project started on 30 October 2026, with access to the EECS C106A TurtleBots at UC Berkeley. The question: if the MPC knows where a walking person will be over its horizon, does it avoid them better than MPPI, which only sees the current costmap?
 
-## The optimal control problem
+## Method
 
-Every 0.1 s, from the measured state $`\hat{x}(t)`$, acados solves
+Each lidar scan is cut into circles, each circle is tracked by a constant-velocity Kalman filter, and the tracks are predicted to the time of every MPC stage. Every 0.1 s, from the measured state $`\hat{x}(t)`$, acados solves
 
 ```math
 \begin{aligned}
@@ -26,154 +30,65 @@ Every 0.1 s, from the measured state $`\hat{x}(t)`$, acados solves
 \end{aligned}
 ```
 
-on the unicycle with the velocities as states, so the acceleration limits are hard and the command is smooth:
+on a unicycle with $`v, \omega`$ as states and accelerations as inputs, $`N = 30`$, $`\Delta t = 0.1`$ s, $`M = 6`$ obstacles per stage, SQP-RTI. Obstacle $`j`$ is the tracker's circle moved by its estimated velocity to the time of stage $`k`$, with a radius that grows with the velocity uncertainty. With `predict:=false` every obstacle gets zero velocity: that is the ablation, and what a costmap controller sees. Weights, limits and the prediction model: [docs/FORMULATION.md](docs/FORMULATION.md).
 
-```math
-x = \begin{bmatrix} p_x & p_y & \theta & v & \omega \end{bmatrix}^{\top}, \qquad
-u = \begin{bmatrix} a & \alpha \end{bmatrix}^{\top}, \qquad
-\dot{p}_x = v\cos\theta,\;\; \dot{p}_y = v\sin\theta,\;\; \dot{\theta} = \omega,\;\; \dot{v} = a,\;\; \dot{\omega} = \alpha
-```
+The baselines are Nav2's MPPI and Regulated Pure Pursuit on the same path, costmap and speed caps. The code is mine except the TurtleBot3 driver configuration, adapted from `webots_ros2_turtlebot`.
 
-```math
-y(x, u) = \begin{bmatrix} p_x & p_y & \cos\theta & \sin\theta & v & \omega & a & \alpha \end{bmatrix}^{\top}, \qquad
-y_N(x) = \begin{bmatrix} p_x & p_y & \cos\theta & \sin\theta & v \end{bmatrix}^{\top}
-```
+## Results
 
-The heading is tracked through $`\cos\theta, \sin\theta`$, so there is no angle wrapping. Each obstacle $`j`$ is a lidar cluster tracked by a constant-velocity Kalman filter (position $`o_j`$, velocity $`\hat{v}_j`$, velocity uncertainty $`\sigma_{v,j}`$, last update $`t_j`$), predicted to the time of stage $`k`$:
+Webots, same caps for every controller (0.20 m/s, 2.0 rad/s), one lap of a 9.15 m figure eight per run, each in a fresh simulation. Cells: runs with contact / runs, then closest approach in cm (edge to edge, ground truth; negative is contact).
 
-```math
-\tau_{k,j} = t - t_j + k\,\Delta t, \qquad
-\hat{o}_j(\tau) = o_j + \hat{v}_j\,\tau, \qquad
-\hat{r}_j(\tau) = r_j + \min\left(0.25\ \mathrm{m},\ \sigma_{v,j}\,\tau\right)
-```
-
-The reference $`y^{\mathrm{ref}}_k`$ is the path point at arc length $`s_k = s_0 + k\,v_{\mathrm{ref}}\Delta t`$ from the robot's projection $`s_0`$, with speed $`v_{\mathrm{ref}}`$, turn rate $`v_{\mathrm{ref}}\,\kappa(s_k)`$ and zero accelerations.
-
-| | |
-|---|---|
-| Horizon | $`N = 30`$ stages of $`\Delta t = 0.1`$ s (3 s) |
-| Weights | $`W = \mathrm{diag}(20, 20, 2, 2, 5, 0.2, 2, 0.2)`$, $`W_N = \mathrm{diag}(40, 40, 4, 4, 5)`$ |
-| Obstacles | $`M = 6`$ per stage, the closest to the last predicted trajectory; walls as static 0.3 m pieces |
-| Slack penalty | $`\rho_1 = 200`$, $`\rho_2 = 2000`$: the QP stays feasible when someone steps next to the robot |
-| Limits (Burger) | $`v_{\max} = 0.20`$ m/s, $`\omega_{\max} = 2.0`$ rad/s, $`a_{\max} = 0.5`$ m/s², $`\alpha_{\max} = 3.0`$ rad/s² |
-| Solver | SQP real-time iteration, Gauss-Newton, HPIPM with partial condensing: 0.85 ms median |
-
-With `predict:=false`, $`\hat{v}_j = 0`$: the obstacles stay where they are now. That is the ablation, and what a costmap controller like MPPI sees. Code: [`ocp.py`](src/tb_nmpc/tb_nmpc/ocp.py).
-
-## On the real robot
-
-Lab TurtleBot3 Burger "apple", ROS 2 Humble, controller on the lab workstation. Positions come from odometry and cartographer (no motion capture).
-
-![Phone video of the real circle lap next to the logged odometry path, placed on the log by the phone's clock](docs/figures/real_circle_sync.webp)
-
-Circle of radius 0.5 m at 0.12 m/s: 1.0 cm RMS tracking error in odometry ([runs](results/real_2026-11-01)).
-
-**Autonomous exploration.** The robot picks a frontier of the cartographer map, the NMPC drives it there, it spins taking 12 photos, and it takes one every 30 cm while driving. Run 3: 5 min 30 s, 13.9 m, a 13.2 m x 8.4 m map, 76 photos. Left, a photo spin (run 1); right, run 3 replayed from its rosbag.
-
-<p>
-<img src="docs/figures/real_exploration_spin.webp" width="40%" alt="Phone video: the TurtleBot spinning in place to take photos during exploration run 1">
-<img src="docs/figures/real_exploration_run3.gif" width="58%" alt="The cartographer map growing as the robot explores, with its path, lidar points and frontier goals">
-</p>
-
-![Final map with the robot's path, where each of the 76 photos was taken, and ten of them pinned to their spot](docs/figures/real_photo_map.png)
-
-![Panorama of the second spin, at the west end of the room](results/explore_2026-11-02c/panoramas/pano_1.jpg)
-
-![Panorama of the third spin, at the east end of the room](results/explore_2026-11-02c/panoramas/pano_2.jpg)
-
-## Results in simulation
-
-Webots, two runs per case (seven for the NMPC at 0.5 m/s), same caps for every controller (0.20 m/s, 2.0 rad/s). Clearance is edge to edge from the ground truth, negative means contact ([summary](results/sim_2026-10-30/summary.md), [repeats](results/sim_2026-10-31_crossing_repeats)).
-
-| | NMPC + prediction | NMPC, no prediction | Nav2 MPPI | Nav2 RPP |
+| Scenario | NMPC + prediction | NMPC, no prediction | Nav2 MPPI | Nav2 RPP |
 |---|---|---|---|---|
-| Person crossing at 0.5 m/s: contact, worst clearance | **1/7, -2.2 cm** (median +12.2) | 2/2, -9.2 cm | 3/3, -21.8 cm | 2/2, -7.3 cm |
-| Person crossing at 1.0 m/s | 2/2, -8.5 cm | 2/2, -20.5 cm | 2/2, -25.0 cm | 2/2, -15.7 cm |
-| Two static obstacles near the path | 0/2, +4.0 cm | 0/2, +4.7 cm | 1/2, -7.1 cm | 2/2, -7.0 cm |
+| Person crossing at 0.5 m/s | **1/7**: -2.2 to +32.1, median +12.2 | 2/2: -9.2, -9.0 | 3/3: -21.8, -19.8, -18.2 | 2/2: -7.3, -7.3 |
+| Person crossing at 1.0 m/s | 2/2: -8.5, -6.6 | 2/2: -20.5, -18.2 | 2/2: -25.0, -18.5 | 2/2: -15.7, -15.6 |
+| Two static obstacles near the path | 0/2: +4.0, +10.2 | 0/2: +4.7, +4.7 | 1/2: -7.1, +5.5 | 2/2: -7.0, -7.0 |
 | Clear lap: tracking RMSE (odometry), lap time | 0.2 cm, 53.0 s | 0.2 cm, 52.9 s | 8.6 cm, 45.7 s | 2.1 cm, 64.3 s |
 
-![True robot paths of the four controllers with the person's crossing line](docs/figures/paths_crossing.png)
+At 1.0 m/s every controller is hit: the tracker needs three 5 Hz scans to trust a velocity, which leaves about one second at 0.20 m/s. The NMPC solves in 0.8 to 0.9 ms median on a 2016 laptop CPU.
 
-- At 0.5 m/s the predictive NMPC slows and passes behind the person in 6 of 7 runs. Without prediction it is hit from the side, like MPPI and RPP.
-- At 1.0 m/s every controller is hit: the tracker needs three 5 Hz scans to trust a velocity, which leaves about one second. Prediction cuts the contact depth from 20.5 to 8.5 cm.
-- Solve time 0.79 to 0.91 ms median per run, worst 11.7 ms, on a 2016 laptop CPU (i7-6700HQ), against a 100 ms period.
+On the lab TurtleBot3 Burger (ROS 2 Humble, 0.12 m/s cap, no motion capture): circle r = 0.5 m, 1.9 / 8.6 and 1.0 / 3.4 cm RMSE / max over 2 runs; figure eight, 6.1 / 11.2 cm. The same controller drives a frontier exploration with cartographer: run 3 lasted 5 min 30 s, drove 13.9 m, mapped 13.2 m x 8.4 m and took 76 photos ([run 3](results/explore_2026-11-02c/README.md)).
 
-<details>
-<summary>More figures and notes</summary>
+![Exploration run 3 replayed from its rosbag: map, path, lidar points and frontier goals](docs/figures/real_exploration_run3.gif)
 
-![Distance to the person over time, 0.5 m/s crossing](docs/figures/clearance_crossing.png)
+*Exploration run 3, replayed from its rosbag.*
 
-![Webots view: the TurtleBot waits and turns behind the person crossing at 0.5 m/s](docs/figures/webots_nmpc_crossing.gif)
+## Install and quick start
 
-The Webots view is a third NMPC run, recorded separately and not in the table ([log](results/sim_2026-10-30_video/crossing_nmpc_recorded)): 24 cm closest. MPPI has no target speed and drives at its cap, which is part of why it laps fastest and cuts the lobes. RPP has no avoidance and touches both static obstacles.
+Tested on WSL2 Ubuntu 24.04, ROS 2 Jazzy, Webots R2025a on Windows, acados v0.5.5 in `~/acados`, casadi 3.7.2. The lab runs used ROS 2 Humble.
 
-</details>
+```bash
+bash scripts/install_nav2_userspace.sh   # or apt install the ros-jazzy-nav2-* controllers
+bash scripts/setup_ws.sh                 # ~/tb_ws, links src/ and casadi, builds
+source scripts/env.sh
+python3 -m pytest src/tb_nmpc/test src/tb_explore/test   # 21 passed
+python3 scripts/offline_check.py                         # no ROS, ~10 s, min clearance near +24 cm
+bash scripts/sim.sh controller:=nmpc scenario:=crossing  # then: ros2 service call /tb_nmpc/start std_srvs/srv/Trigger
+```
 
-## What I built
+Controllers: `nmpc`, `nmpc_nopred`, `mppi`, `rpp`. Scenarios: `clear`, `static`, `crossing`, `crossing_fast`. The Windows firewall must let WSL reach Webots on TCP 1234. Real robot: [docs/REAL_ROBOT_CHECKLIST.md](docs/REAL_ROBOT_CHECKLIST.md). Benchmark and figure commands: [docs/REPRODUCING.md](docs/REPRODUCING.md).
 
-All of it, except the upstream pieces listed in Credits.
+## Code structure
 
-- [`ocp.py`](src/tb_nmpc/tb_nmpc/ocp.py): the problem above in acados.
-- [`perception.py`](src/tb_nmpc/tb_nmpc/perception.py): /scan to circles; walls cut into static pieces.
-- [`tracker.py`](src/tb_nmpc/tb_nmpc/tracker.py): Kalman tracks and their prediction over the horizon.
-- [`nmpc_node.py`](src/tb_nmpc/tb_nmpc/nmpc_node.py): the ROS 2 node, Twist or TwistStamped, [Burger](src/tb_nmpc/config/burger.yaml) and [TurtleBot4](src/tb_nmpc/config/tb4.yaml) limits, safety stop.
-- [`nav2_follow.py`](src/tb_nmpc/tb_nmpc/nav2_follow.py): the baselines, Nav2's controller_server with [MPPI](src/tb_nmpc/config/nav2_mppi.yaml) or [RPP](src/tb_nmpc/config/nav2_rpp.yaml) on the same path.
-- [`tb_nmpc_sim`](src/tb_nmpc_sim): the Webots world and a supervisor that walks the pedestrian across the path.
-- [`tb_explore`](src/tb_explore): frontier exploration with photo capture ([docs](docs/EXPLORATION.md)).
-- [`scripts/`](scripts): benchmark, metrics, figures, panoramas, an offline closed-loop check without ROS.
-
-## How I checked it
-
-- 13 unit tests for the controller and 8 for the exploration ([controller](src/tb_nmpc/test), [exploration](src/tb_explore/test)).
-- [`offline_check.py`](scripts/offline_check.py): NMPC and tracker in a plain unicycle simulation, no ROS. With prediction 23.5 cm clearance, without it contact (-20.6 cm): the same ordering as in Webots.
-- Perception against the Webots ground truth: 8 to 16 cm position and 0.06 to 0.11 m/s velocity error on a person at 0.5 m/s.
-- Fair baselines: Nav2 Jazzy MPPI defaults and default inflation, the same costmap for MPPI and RPP. The one change is MPPI's goal-critic thresholds (1.4 to 0.6 m).
-
-<details>
-<summary>Things that changed the numbers while I built it</summary>
-
-- The soft obstacle constraints had no penalty on their upper slack. The QP often hit its 50-iteration cap (6 ms median); with the penalty it converges in about 12 iterations (1 ms).
-- MPPI first took 100 s for a lap the NMPC does in 53 s. On a figure eight a path segment could end within 1.4 m of the robot, which switches on the goal critics. Segments now end at their farthest point and the thresholds are 0.6 m.
-- With the cylinder exactly on the path, both the NMPC and MPPI stopped in front of it for good. I made the NMPC's reference skip past static obstacles, and moved the cylinder 18 cm off the path.
-- ros2_control sometimes read the placeholder robot description before the Webots driver replaced it. The placeholder now carries the ros2_control block.
-- My first fix for a clock offset between the robot and the computer dropped the scan's transport delay, and contact at 0.5 m/s went to 3 of 5 runs. The offset is now the minimum of (receive time - stamp) over 10 s.
-
-</details>
+| Path | Role |
+|---|---|
+| [`ocp.py`](src/tb_nmpc/tb_nmpc/ocp.py) | the OCP above, in acados |
+| [`perception.py`](src/tb_nmpc/tb_nmpc/perception.py), [`tracker.py`](src/tb_nmpc/tb_nmpc/tracker.py) | scan to circles; Kalman tracks and their prediction |
+| [`nmpc_node.py`](src/tb_nmpc/tb_nmpc/nmpc_node.py), [`reference.py`](src/tb_nmpc/tb_nmpc/reference.py) | ROS 2 node, watchdog, safety stop; paths and horizon sampling |
+| [`nav2_follow.py`](src/tb_nmpc/tb_nmpc/nav2_follow.py), [`config/`](src/tb_nmpc/config) | Nav2 baselines on the same path; robot limits |
+| [`tb_nmpc_sim`](src/tb_nmpc_sim), [`tb_explore`](src/tb_explore) | Webots worlds and pedestrian; frontier exploration |
+| [`scripts/`](scripts) | benchmark, metrics, figures, offline check |
 
 ## Limitations
 
-- The contact rates come from simulation, with few runs. On the real robot only tracking is measured so far: the runs with a box on the circle need redoing.
-- The simulated person is a 0.15 m cylinder walking straight at constant speed.
-- At 1.0 m/s nobody avoids the person, the NMPC included.
+- The contact rates come from simulation, with 2 to 7 runs per cell; on the real robot only tracking is measured.
+- The simulated person is a 0.15 m cylinder walking straight at constant speed, and does not yield.
+- At 1.0 m/s nobody avoids the person: 5 Hz lidar, three scans to confirm a velocity, 0.20 m/s top speed.
 - Nav2 runs without a planner or velocity smoother, with default MPPI parameters.
 - No ground truth on the real robot: errors are in the odometry frame.
 
-## Reproduce
+## Credits and license
 
-WSL2 (Ubuntu 24.04) with ROS 2 Jazzy, `ros-jazzy-webots-ros2`, Webots R2025a on Windows, acados v0.5.5 in `~/acados` and casadi. For the baselines, Nav2:
+[acados](https://github.com/acados/acados) and [CasADi](https://web.casadi.org) for the solver; [Nav2](https://github.com/ros-navigation/navigation2) for MPPI, RPP and the costmap; [webots_ros2](https://github.com/cyberbotics/webots_ros2) for the TurtleBot3 driver configuration and robot model; [cartographer](https://github.com/cartographer-project/cartographer_ros) for the map; the C106A staff for the lab TurtleBots. The photo reconstructions in the exploration notes use my C106A team's Lab 6 code, not in this repository. Related work read before starting: G. Turrisi's acados NMPC for a differential-drive robot in ROS 2, and MPC with control barrier functions on TurtleBots with moving obstacles.
 
-```bash
-sudo apt install ros-jazzy-nav2-controller ros-jazzy-nav2-mppi-controller ros-jazzy-nav2-regulated-pure-pursuit-controller ros-jazzy-nav2-costmap-2d ros-jazzy-nav2-lifecycle-manager
-# or, without sudo:
-bash scripts/install_nav2_userspace.sh
-```
-
-```bash
-bash scripts/setup_ws.sh                  # ~/tb_ws, links src/, builds
-source scripts/env.sh
-python3 scripts/offline_check.py          # NMPC closed loop without ROS, 10 s
-python3 -m pytest src/tb_nmpc/test src/tb_explore/test
-bash scripts/sim.sh controller:=nmpc scenario:=crossing      # then: ros2 service call /tb_nmpc/start std_srvs/srv/Trigger
-bash scripts/run_benchmark.sh results/sim_2026-10-30         # every scenario and controller, about 80 min
-python3 scripts/plot_benchmark.py results/sim_2026-10-30 docs/figures
-```
-
-The Windows firewall must let WSL reach Webots on TCP 1234. Real robot: [docs/REAL_ROBOT_CHECKLIST.md](docs/REAL_ROBOT_CHECKLIST.md). Exploration: [docs/EXPLORATION.md](docs/EXPLORATION.md).
-
-## Credits
-
-- [acados](https://github.com/acados/acados) (BSD-2) and [CasADi](https://web.casadi.org) (LGPL) for the solver.
-- [Nav2](https://github.com/ros-navigation/navigation2) (Apache-2.0): MPPI, Regulated Pure Pursuit, costmap.
-- [webots_ros2](https://github.com/cyberbotics/webots_ros2) (Apache-2.0): the TurtleBot3 driver configuration is adapted from `webots_ros2_turtlebot`; the robot model is Cyberbotics' TurtleBot3Burger PROTO.
-- [cartographer](https://github.com/cartographer-project/cartographer_ros) for the map, and the C106A course staff for the lab TurtleBots.
-- Related work I read before starting: G. Turrisi's acados NMPC for a differential-drive robot in ROS 2, and MPC with control barrier functions on TurtleBots with moving obstacles, both in simulation.
+MIT license ([LICENSE](LICENSE)). Citation metadata: [CITATION.cff](CITATION.cff).

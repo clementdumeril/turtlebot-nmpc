@@ -1,0 +1,2 @@
+scenario,controller,runs,completed,lap_time_s,cte_odom_rmse_cm,cte_odom_max_cm,cte_rmse_cm,cte_max_cm,min_clearance_cm,collisions,stops,ang_accel_rms,solve_med_ms,solve_p99_ms,solve_max_ms,ped_pos_err_cm,ped_vel_err
+crossing,nmpc,1,1,56.300000000000004,0.4188183240966467,2.06968724907278,3.190378097472782,5.90729472564452,23.93488962219423,0,1,0.35607075854824755,0.9795,2.218,2.851,12.81146015358724,0.0719046073485531

@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "TurtleBot NMPC: lidar obstacle prediction against Nav2 MPPI"
+type: software
+authors:
+  - family-names: Dumeril
+    given-names: Clément
+    affiliation: "University of California, Berkeley"
+repository-code: "https://github.com/clementdumeril/turtlebot-nmpc"
+license: MIT
+date-released: "2026-11-03"
+keywords:
+  - model predictive control
+  - acados
+  - ROS 2
+  - TurtleBot3
+  - obstacle avoidance
