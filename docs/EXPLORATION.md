@@ -25,6 +25,9 @@ explorer --> /auto_capture/capture --> auto_capture: photo + TF map -> base_link
 - [`scripts/explore_offline.py`](../scripts/explore_offline.py): the planner and the NMPC in a simulated 4 m × 3 m room, with an inner wall (0.8 m door) and two boxes, a simulated lidar and the log-odds map. Result: 99 % of the room explored, 6 goals, 8 photo spots, back within 3 cm of the start, never closer than 9 cm to a wall, 292 s of robot time.
 - Webots, same room (`world:=room.wbt`), the whole ROS stack with `mapper:=simple`: 3 goals, 4 spins, 46 photos with poses, back home, 205 s. Photos were taken at 30° steps to within 2°. One photo was lost at the very start, before the camera streamed; there is now one retry.
 - Real robot, 2 November 2026 ([run](../results/explore_2026-11-02/README.md)): 2 goals, 36 photos with poses, back home in 257 s; Lab 6 bundle adjustment 0.30 px, but only 88 points. Fixed since: frontiers behind cartographer's uncertain band, and photos every 0.3 m while driving (`capture_spacing`).
+- Real robot, runs 2 and 3 ([run 2](../results/explore_2026-11-02b/README.md), [run 3](../results/explore_2026-11-02c/README.md)): run 2 mapped 10.8 m x 9.3 m over 19.1 m before the battery ran low; run 3 took 5 min 30 s, drove 13.9 m, mapped 13.2 m x 8.4 m and took 76 photos (33 while driving), with 219 reconstructed points at 0.21 px. 360 degree panoramas are stitched from the spins with the robot's yaw (`scripts/spin_panorama.py`).
+
+![Final map of run 3 with the robot's path, where each photo was taken, and ten of them pinned to their spot](figures/real_photo_map.png)
 
 ## Run it on the robot (C106A lab)
 
