@@ -17,7 +17,7 @@ setup(
     zip_safe=True,
     maintainer="Clement Dumeril",
     maintainer_email="clementdumeril@gmail.com",
-    description="Frontier exploration with the NMPC and Lab 6 photo capture",
+    description="Frontier exploration with the NMPC and posed photo capture",
     license="MIT",
     tests_require=["pytest"],
     entry_points={

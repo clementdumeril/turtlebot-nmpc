@@ -2,7 +2,7 @@
 <package format="3">
   <name>tb_explore</name>
   <version>0.1.0</version>
-  <description>Autonomous frontier exploration for TurtleBot3 with the tb_nmpc controller, and photo + pose capture in the C106A Lab 6 format.</description>
+  <description>Autonomous frontier exploration for TurtleBot3 with the tb_nmpc controller, and posed photo capture for 3D reconstruction.</description>
   <maintainer email="clementdumeril@gmail.com">Clement Dumeril</maintainer>
   <license>MIT</license>
 
@@ -18,7 +18,7 @@
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
-  <!-- On the robot: cartographer_ros and turtlebot3_cartographer (as in Lab 4). -->
+  <!-- On the robot: cartographer_ros and turtlebot3_cartographer (standard TurtleBot3 setup). -->
 
   <test_depend>python3-pytest</test_depend>
 

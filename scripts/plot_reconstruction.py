@@ -1,7 +1,7 @@
-"""Top and side view of a Lab 6 reconstruction with the photo spots.
+"""Top and side view of a SIFT + bundle-adjustment reconstruction with the photo spots.
 
-    python3 scripts/plot_reconstruction.py <lab6 dir> <run name> <out.png>
-(<lab6 dir> holds reconstruction/output/<run>/ba.ply and captures/<run>/poses.csv)
+    python3 scripts/plot_reconstruction.py <reconstruction dir> <run name> <out.png>
+(<reconstruction dir> holds reconstruction/output/<run>/ba.ply and captures/<run>/poses.csv)
 """
 import csv
 import sys

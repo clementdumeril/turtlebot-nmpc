@@ -1,7 +1,7 @@
 """Log-odds occupancy grid from 2D scans at known poses (odometry), no loop closure.
 
 The fallback mapper for simulation and for the offline check. On the robot, cartographer (as
-in Lab 4) builds the map and corrects the odometry drift; this one trusts the odometry.
+on the lab robot) builds the map and corrects the odometry drift; this one trusts the odometry.
 """
 from __future__ import annotations
 

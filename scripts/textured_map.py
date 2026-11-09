@@ -167,7 +167,7 @@ def main():
     global R_BC
     ap = argparse.ArgumentParser()
     ap.add_argument("map"); ap.add_argument("run"); ap.add_argument("calib"); ap.add_argument("out")
-    ap.add_argument("--pitch", type=float, default=8.12, help="camera tilt up, deg (Lab 6 value)")
+    ap.add_argument("--pitch", type=float, default=8.12, help="camera tilt up, deg (calibrated value)")
     ap.add_argument("--camera-height", type=float, help="camera height above the floor, m")
     a = ap.parse_args()
     mp, run, calib, out = Path(a.map), Path(a.run), Path(a.calib), Path(a.out)

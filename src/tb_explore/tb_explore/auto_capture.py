@@ -1,11 +1,11 @@
-"""Photo + pose capture on a service call, in the Lab 6 format.
+"""Photo + pose capture on a service call.
 
-Same output as lab6_capture/capture_pose.py, so the Lab 6 reconstruction scripts read it as is:
+Output:
 <output_dir>/run_YYYYmmdd_HHMMSS/img_0000.png ... and poses.csv with the columns
 file, image_stamp, tf_stamp, tf_source, x, y, z, qx, qy, qz, qw, yaw_deg
 (pose of base_link in the map at the image time, or the latest one if the clocks disagree).
 
-The difference is the trigger: ~/capture (Trigger) instead of the space bar. The photo is the
+The trigger is ~/capture (Trigger). The photo is the
 second frame that arrives after the call (the first may have been taken while turning), and
 ~/saved (Int32, photos so far) tells the explorer it can turn again.
 """
@@ -59,7 +59,7 @@ class AutoCapture(Node):
         self.out = os.path.join(os.path.expanduser(g("output_dir")), time.strftime("run_%Y%m%d_%H%M%S"))
         os.makedirs(self.out, exist_ok=True)
         self.csv_path = os.path.join(self.out, "poses.csv")
-        # Reliable, as lab6_capture does: an image is hundreds of UDP fragments over the wifi, and
+        # Reliable QoS: an image is hundreds of UDP fragments over the wifi, and
         # with best effort one lost fragment drops the whole image (photos then stopped coming for
         # tens of seconds on the lab TurtleBot). Set image_reliable:=false for a best-effort camera.
         qos = QoSProfile(depth=2, reliability=ReliabilityPolicy.RELIABLE) if g("image_reliable") else qos_profile_sensor_data

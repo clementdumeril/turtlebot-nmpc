@@ -1,6 +1,6 @@
 # Autonomous exploration and photo capture
 
-The TurtleBot maps a room it does not know and takes the photos for the Lab 6 reconstruction by itself.
+The TurtleBot maps a room it does not know and takes posed photos for a 3D reconstruction by itself.
 
 ![Offline check: explored map, robot path and photo spots](figures/explore_offline.png)
 
@@ -17,21 +17,21 @@ explorer --> /auto_capture/capture --> auto_capture: photo + TF map -> base_link
 3. **Drive.** The robot turns to face the path, then the NMPC follows it (`path_source:=topic`), still avoiding what the lidar sees, and publishes `/follow/done` at the end.
 4. Back to 1. With no reachable frontier left on three maps in a row, the robot drives back to its start and stops.
 
-[`auto_capture`](../src/tb_explore/tb_explore/auto_capture.py) writes the same folder as `lab6_capture/capture_pose.py`: `run_YYYYmmdd_HHMMSS/img_0000.png …` and `poses.csv` with `file, image_stamp, tf_stamp, tf_source, x, y, z, qx, qy, qz, qw, yaw_deg`. The Lab 6 scripts read it unchanged.
+[`auto_capture`](../src/tb_explore/tb_explore/auto_capture.py) writes `run_YYYYmmdd_HHMMSS/img_0000.png …` and `poses.csv` with `file, image_stamp, tf_stamp, tf_source, x, y, z, qx, qy, qz, qw, yaw_deg`.
 
 ## Checks
 
 - Unit tests (`src/tb_explore/test`): frontier on a half-known room, costmap, plan to the frontier that never crosses an occupied cell, blacklist, path home, log-odds map.
 - [`scripts/explore_offline.py`](../scripts/explore_offline.py): the planner and the NMPC in a simulated 4 m × 3 m room, with an inner wall (0.8 m door) and two boxes, a simulated lidar and the log-odds map. Result: 99 % of the room explored, 6 goals, 8 photo spots, back within 3 cm of the start, never closer than 9 cm to a wall, 292 s of robot time.
 - Webots, same room (`world:=room.wbt`), the whole ROS stack with `mapper:=simple`: 3 goals, 4 spins, 46 photos with poses, back home, 205 s. Photos were taken at 30° steps to within 2°. One photo was lost at the very start, before the camera streamed; there is now one retry.
-- Real robot, 2 November 2026 ([run](../results/explore_2026-11-02/README.md)): 2 goals, 36 photos with poses, back home in 257 s; Lab 6 bundle adjustment 0.30 px, but only 88 points. Fixed since: frontiers behind cartographer's uncertain band, and photos every 0.3 m while driving (`capture_spacing`).
+- Real robot, 2 November 2026 ([run](../results/explore_2026-11-02/README.md)): 2 goals, 36 photos with poses, back home in 257 s; bundle adjustment 0.30 px, but only 88 points. Fixed since: frontiers behind cartographer's uncertain band, and photos every 0.3 m while driving (`capture_spacing`).
 - Real robot, runs 2 and 3 ([run 2](../results/explore_2026-11-02b/README.md), [run 3](../results/explore_2026-11-02c/README.md)): run 2 mapped 10.8 m x 9.3 m over 19.1 m before the battery ran low; run 3 took 5 min 30 s, drove 13.9 m, mapped 13.2 m x 8.4 m and took 76 photos (33 while driving), with 219 reconstructed points at 0.21 px. 360 degree panoramas are stitched from the spins with the robot's yaw (`scripts/spin_panorama.py`).
 
 ![Final map of run 3 with the robot's path, where each photo was taken, and ten of them pinned to their spot](figures/real_photo_map.png)
 
-## Run it on the robot (C106A lab)
+## Run it on the robot
 
-On the TurtleBot (ssh), two sessions, as in Lab 4:
+On the TurtleBot (ssh), two sessions:
 
 ```bash
 ros2 launch turtlebot3_bringup robot.launch.py
@@ -51,17 +51,9 @@ On apple the camera topic is `/apple/image_raw`. Useful options: `max_speed:=0.1
 
 Watch in RViz: `/map`, `/explorer/frontiers` (blue points, orange goal), `/tb_nmpc/reference_path`, `/tb_nmpc/obstacles`.
 
-## Reconstruct with Lab 6
+## Reconstruction
 
-```bash
-cp -r ~/explore_captures/run_<date> <your lab6 folder>/captures/
-cd <your lab6 folder>/reconstruction
-python3 multiview.py ../captures/run_<date>
-python3 bundle_adjust.py ../captures/run_<date>
-python3 view_viser.py ../captures/run_<date>
-```
-
-It uses the camera calibration you made in Lab 6 (`calibration/calibration.json`). `multiview.py` matches every pair of photos, so 48 photos means 1128 pairs: start with `captures_per_spin:=8` or a short run.
+The run folder (photos and `poses.csv`) feeds any SIFT + bundle-adjustment pipeline with a calibrated camera; the reconstructions in `results/` used a separate one, not in this repository. Matching every pair of photos grows fast (48 photos means 1128 pairs): start with `captures_per_spin:=8` or a short run. [`scripts/colmap_known_poses.py`](../scripts/colmap_known_poses.py) writes the robot's camera poses as a COLMAP model.
 
 ## In Webots
 

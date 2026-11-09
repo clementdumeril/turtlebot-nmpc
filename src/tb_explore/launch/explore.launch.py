@@ -1,13 +1,13 @@
 """Autonomous exploration: mapper + NMPC (following planned paths) + explorer + photo capture.
 
-On the robot (C106A lab, Humble), with the bring-up and the camera running on the TurtleBot:
+On the robot (ROS 2 Humble), with the bring-up and the camera running on the TurtleBot:
     ros2 launch tb_explore explore.launch.py
 Then:  ros2 service call /explorer/start std_srvs/srv/Trigger
 
 In Webots (no cartographer installed there):
     ros2 launch tb_explore explore.launch.py mapper:=simple use_sim_time:=true image_topic:=/camera/image_color
 
-mapper:=cartographer runs the same two nodes as Lab 4's slam_launch.py (turtlebot3_lds_2d.lua).
+mapper:=cartographer runs cartographer_node and the occupancy grid node with turtlebot3_lds_2d.lua.
 """
 import os
 
@@ -78,7 +78,7 @@ def generate_launch_description():
         ("robot_model", "burger", "burger or tb4"),
         ("max_speed", "0.12", "[m/s]"),
         ("cmd_vel_type", "auto", "auto, twist or stamped"),
-        ("image_topic", "/image_raw", "camera topic (C106A apple: /apple/image_raw, Webots: /TurtleBot3Burger/camera/image_color)"),
+        ("image_topic", "/image_raw", "camera topic (namespaced lab robot: /apple/image_raw, Webots: /TurtleBot3Burger/camera/image_color)"),
         ("output_dir", "~/explore_captures", "a run_YYYYmmdd_HHMMSS folder is created inside"),
         ("capture", "true", "false = explore without photos"),
         ("captures_per_spin", "12", "photos per turn in place (30 degrees apart)"),

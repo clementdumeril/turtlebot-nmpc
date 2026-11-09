@@ -1,4 +1,4 @@
-"""Autonomous exploration with photo capture, for the Lab 6 reconstruction.
+"""Autonomous exploration with photo capture, for a 3D reconstruction.
 
 Loop: spin in place taking `captures_per_spin` photos -> pick the best reachable frontier on
 /map -> turn to face the path -> send the path to the NMPC (/tb_nmpc/path) -> wait for

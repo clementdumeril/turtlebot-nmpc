@@ -16,7 +16,7 @@ from scipy.sparse import lil_matrix
 from scipy.spatial.transform import Rotation
 
 level = Rotation.from_euler("xyz", [-np.pi / 2, 0.0, -np.pi / 2]).as_matrix()
-MOUNT_RPY0 = np.array([float(sys.argv[4]) if len(sys.argv) > 4 else 8.12, 0.0, -0.17])  # Lab 6: 8.12 deg up
+MOUNT_RPY0 = np.array([float(sys.argv[4]) if len(sys.argv) > 4 else 8.12, 0.0, -0.17])  # calibrated: 8.12 deg up
 T0 = np.array([0.115, 0.0, 0.0])
 
 model, poses_csv, calib = sys.argv[1:4]
@@ -90,12 +90,12 @@ def stats(z, tag):
 
 
 z0 = np.r_[np.zeros(5), X0.ravel()]
-stats(z0, "Lab 6 mount")
+stats(z0, "calibrated mount")
 # points only first (mount fixed), then everything
 sol = least_squares(lambda x: residual(np.r_[np.zeros(5), x]), X0.ravel(), loss="huber", f_scale=2.0,
                     jac_sparsity=A[:, 5:], x_scale="jac", max_nfev=50)
 z1 = np.r_[np.zeros(5), sol.x]
-stats(z1, "Lab 6 mount, points re-fit")
+stats(z1, "calibrated mount, points re-fit")
 sol = least_squares(residual, z1, loss="huber", f_scale=2.0, jac_sparsity=A, x_scale="jac", max_nfev=200)
 stats(sol.x, "refined mount")
 m = sol.x[:5]
