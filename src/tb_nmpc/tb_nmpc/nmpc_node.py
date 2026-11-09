@@ -38,7 +38,6 @@ from .tracker import Tracker, TrackerParams
 
 
 def yaw_of(q) -> float:
-    """Yaw angle [rad] of a quaternion message."""
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
@@ -46,9 +45,7 @@ class NmpcNode(Node):
     """The controller node: lidar -> circles -> Kalman tracks -> predicted obstacles -> NMPC -> /cmd_vel."""
 
     def __init__(self):
-        """Declare the parameters, build the solver, then the subscriptions, publishers, services, timer."""
         super().__init__("tb_nmpc")
-        # Short names: P("x", default) declares the ROS parameter x, g("x") reads its value
         P = self.declare_parameter
         P("robot_model", "burger")
         P("cmd_vel_topic", "/cmd_vel")
@@ -114,11 +111,8 @@ class NmpcNode(Node):
         self._stopping = False
         self.laser_tf = None
 
-        # TF: the listener subscribes to /tf and /tf_static and stores the transforms in the
-        # buffer; laser_offset() then asks the buffer where the lidar sits on the robot.
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        # Inputs: each message calls its callback (on_odom, on_scan)
         self.create_subscription(Odometry, g("odom_topic"), self.on_odom, qos_profile_sensor_data)
         self.create_subscription(LaserScan, g("scan_topic"), self.on_scan, qos_profile_sensor_data)
         # Outputs. /cmd_vel is created on start, once we know if the robot wants Twist or TwistStamped.
@@ -339,7 +333,6 @@ class NmpcNode(Node):
         return obs
 
     def local_now(self) -> float:
-        """This computer's clock [s]."""
         return self.get_clock().now().nanoseconds * 1e-9
 
     def step(self):

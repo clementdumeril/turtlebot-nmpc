@@ -34,7 +34,6 @@ CSV_FIELDS = ["file", "image_stamp", "tf_stamp", "tf_source",
 
 
 def stamp_to_sec(stamp) -> float:
-    """builtin_interfaces/Time as float seconds."""
     return stamp.sec + stamp.nanosec * 1e-9
 
 

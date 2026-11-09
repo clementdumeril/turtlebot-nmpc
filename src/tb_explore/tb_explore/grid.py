@@ -25,7 +25,6 @@ class Grid:
 
     @property
     def shape(self):
-        """(H, W) of the grid."""
         return self.data.shape
 
     def cell(self, x: float, y: float) -> tuple[int, int]:
@@ -37,7 +36,6 @@ class Grid:
         return self.ox + (np.asarray(j) + 0.5) * self.res, self.oy + (np.asarray(i) + 0.5) * self.res
 
     def inside(self, i: int, j: int) -> bool:
-        """True if (i, j) is a valid cell index."""
         return 0 <= i < self.shape[0] and 0 <= j < self.shape[1]
 
     @property

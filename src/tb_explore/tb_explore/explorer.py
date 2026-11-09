@@ -33,12 +33,10 @@ from .grid import Grid, plan_to_frontier, plan_to_point
 
 
 def yaw_of(q) -> float:
-    """Yaw [rad] of a quaternion message."""
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
 def wrap(a: float) -> float:
-    """Angle wrapped to [-pi, pi]."""
     return math.atan2(math.sin(a), math.cos(a))
 
 
@@ -110,7 +108,6 @@ class Explorer(Node):
 
     # ---------- inputs ----------
     def now(self) -> float:
-        """Node clock time [s] (sim time when use_sim_time)."""
         return self.get_clock().now().nanoseconds * 1e-9
 
     def on_map(self, msg: OccupancyGrid):

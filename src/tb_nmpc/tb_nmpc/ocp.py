@@ -32,10 +32,7 @@ FAR = 1.0e3  # position of unused obstacle slots
 
 @dataclass
 class OcpConfig:
-    """Settings of the optimal control problem: horizon, obstacle slots, limits, weights.
-
-    A dataclass: Python writes the constructor, OcpConfig(N=20) changes one field.
-    """
+    """Settings of the optimal control problem: horizon, obstacle slots, limits, weights."""
 
     N: int = 30                 # stages
     dt: float = 0.1             # [s] stage length (3 s horizon)
@@ -57,11 +54,7 @@ class OcpConfig:
 
 
 def build_ocp(cfg: OcpConfig):
-    """Describe the problem to acados (model, cost, constraints, solver options).
-
-    The variables below are CasADi symbols, not numbers: the formulas written with them are
-    turned into C code by acados.
-    """
+    """Describe the problem to acados (model, cost, constraints, solver options)."""
     import casadi as ca
     from acados_template import AcadosModel, AcadosOcp
 

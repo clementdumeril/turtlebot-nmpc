@@ -30,8 +30,8 @@ class TrackerParams:
 
 @dataclass
 class Track:
-    """One tracked obstacle: state x = [x, y, vx, vy], covariance P (how unsure each value is),
-    radius r, time t of the last predict, number of detections fused (hits)."""
+    """One tracked obstacle: state x = [x, y, vx, vy], covariance P, radius r, time t of the last
+    predict, number of detections fused (hits)."""
 
     id: int
     x: np.ndarray
@@ -44,7 +44,6 @@ class Track:
 
     @property
     def speed(self) -> float:
-        """Estimated speed [m/s]."""
         return float(np.hypot(self.x[2], self.x[3]))
 
 
@@ -52,18 +51,15 @@ class Tracker:
     """All the tracks, updated with the circles of each scan."""
 
     def __init__(self, params: TrackerParams | None = None):
-        """No tracks yet; ids count up from 0."""
         self.p = params or TrackerParams()
         self.tracks: list[Track] = []
         self._ids = count()
 
     def _predict(self, tr: Track, t: float) -> None:
-        """Kalman predict: move the track to time t at constant velocity; P grows because the
-        obstacle may have accelerated (sigma_a) while we were not looking."""
+        """Kalman predict to time t at constant velocity, white-acceleration noise sigma_a."""
         dt = t - tr.t
         if dt <= 0:
             return
-        # x += vx dt, y += vy dt, velocity unchanged
         F = np.eye(4)
         F[0, 2] = F[1, 3] = dt
         # How an unknown acceleration over dt moves the position (dt^2/2) and the velocity (dt)
@@ -73,18 +69,12 @@ class Tracker:
         tr.t = t
 
     def _update(self, tr: Track, z: np.ndarray, r: float) -> None:
-        """Kalman update with a measured centre z = [x, y] (and radius r); P shrinks.
-
-        The gain K also has rows for vx, vy: if the obstacle shows up farther than predicted,
-        part of the gap goes into the velocity. That is how the velocity is estimated although
-        the lidar only measures positions.
-        """
-        # The lidar measures the position only: z = H x
+        """Kalman update with a measured centre z = [x, y]; low-pass the radius r."""
         H = np.zeros((2, 4))
         H[0, 0] = H[1, 1] = 1.0
-        S = H @ tr.P @ H.T + (self.p.sigma_z ** 2) * np.eye(2)  # uncertainty of the gap below
-        K = tr.P @ H.T @ np.linalg.inv(S)  # large P: trust the measurement; large sigma_z: trust the prediction
-        tr.x = tr.x + K @ (z - H @ tr.x)  # z - H x = gap between what we see and what we expected
+        S = H @ tr.P @ H.T + (self.p.sigma_z ** 2) * np.eye(2)
+        K = tr.P @ H.T @ np.linalg.inv(S)
+        tr.x = tr.x + K @ (z - H @ tr.x)
         tr.P = (np.eye(4) - K @ H) @ tr.P
         v = np.hypot(tr.x[2], tr.x[3])
         if v > self.p.v_max:

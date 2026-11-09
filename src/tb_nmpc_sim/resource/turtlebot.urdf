@@ -1,4 +1,10 @@
 <?xml version="1.0" ?>
+<!--
+Derived from webots_ros2_turtlebot (https://github.com/cyberbotics/webots_ros2),
+Copyright Cyberbotics Ltd., licensed under the Apache License, Version 2.0:
+http://www.apache.org/licenses/LICENSE-2.0. Modified for this project (see the line below);
+distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
+-->
 <!-- Webots TurtleBot3 Burger, as in webots_ros2_turtlebot, plus the scene supervisor plugin. -->
 <robot name="TurtleBot3 Burger Webots">
     <webots>

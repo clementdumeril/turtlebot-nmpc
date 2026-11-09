@@ -51,7 +51,7 @@ def generate_launch_description():
         ("use_sim_time", "false", ""),
         ("predict", "true", "false = obstacles frozen at their current position"),
         ("max_speed", "0.12", "speed cap [m/s], below the robot file's v_max; empty = v_max"),
-        ("path_size", "1.0", "half-width a of the figure eight, or circle radius [m]; see the checklist"),
+        ("path_size", "1.0", "half-width a of the figure eight, or circle radius [m]; see docs/REPRODUCING.md"),
         ("path_shape", "eight", "eight or circle (starts heading forward, turns left)"),
         ("track_v_static", "0.10", "[m/s] tracks slower than this are predicted static"),
         ("track_min_hits", "3", "detections before a track's velocity is used"),
