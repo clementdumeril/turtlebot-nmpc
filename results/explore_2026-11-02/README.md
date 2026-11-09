@@ -4,7 +4,7 @@ Lab TurtleBot3 "apple", C106A workstation (Humble), `ros2 launch tb_explore expl
 
 ## What happened
 
-From [explore_log.txt](explore_log.txt) (it also holds earlier attempts of the day; this run starts at 1793662625):
+From [explore_log.txt](explore_log.txt) (the log lines of this run's own nodes: `explorer`, `tb_nmpc`, `auto_capture`):
 
 - start spin (12 photos), goal 1 at 2.7 m (path 2.70 m), spin, goal 2 at 5.3 m (path 3.07 m), spin, then "no reachable frontier left", drive home, finished in 257 s.
 - 36 photos, 640 x 480, all with the pose at the image time (`tf_source = image_stamp`), none blurred.
