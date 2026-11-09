@@ -48,4 +48,4 @@ NMPC solve time (acados `time_tot`), all 16 NMPC runs: median 0.79 to 0.91 ms pe
 
 ## Cause and next step
 
-The 1.0 m/s failure is a sensing and authority limit, not a solver one: 5 Hz lidar, three scans to confirm a velocity, 0.2 m/s top speed. Next: confirm tracks after two scans, and check whether letting the NMPC reverse (v_min < 0) helps. Then the same scenarios on the real robot ([checklist](../../docs/REAL_ROBOT_CHECKLIST.md)).
+The 1.0 m/s failure is a sensing and authority limit, not a solver one: 5 Hz lidar, three scans to confirm a velocity, 0.2 m/s top speed. Next: confirm tracks after two scans, and check whether letting the NMPC reverse (v_min < 0) helps. Then the same scenarios on the real robot ([how to run it](../../docs/REPRODUCING.md#on-a-turtlebot3)).

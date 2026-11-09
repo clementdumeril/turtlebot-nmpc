@@ -68,7 +68,7 @@
     <text x="792" y="194">unicycle, RK4, SQP-RTI</text>
     <text x="792" y="220">soft clearance to</text>
     <text x="792" y="240">6 predicted circles</text>
-    <text x="792" y="274" fill="#5A6875" font-size="15">0.8 to 0.9 ms median solve</text>
+    <text x="792" y="274" fill="#5A6875" font-size="15">about 1 ms median solve</text>
   </g>
 
   <!-- command to robot -->
@@ -94,8 +94,8 @@
 
   <image href="ov_webots.png" x="36" y="412" width="200" height="140" preserveAspectRatio="xMidYMid slice"/>
   <rect x="36" y="412" width="200" height="140" rx="6" fill="none" stroke="#8A9AA8" stroke-width="1"/>
-  <text x="36" y="576" font-size="15" fill="#15202A">Webots, person crossing</text>
-  <text x="36" y="596" font-size="15" fill="#5A6875">at 0.5 m/s</text>
+  <text x="36" y="576" font-size="15" fill="#15202A">Webots, simulated pedestrian</text>
+  <text x="36" y="596" font-size="15" fill="#5A6875">crossing at 0.5 m/s</text>
 
   <image href="ov_paths.png" x="256" y="412" width="187" height="140" preserveAspectRatio="xMidYMid slice"/>
   <rect x="256" y="412" width="187" height="140" rx="6" fill="none" stroke="#8A9AA8" stroke-width="1"/>
@@ -116,7 +116,7 @@
   <rect x="880" y="412" width="284" height="140" rx="10" fill="none" stroke="#B8461F" stroke-width="1.5"/>
   <text x="898" y="470" font-size="42" fill="#B8461F" font-weight="bold">1/7</text>
   <text x="972" y="452" font-size="16" fill="#15202A">NMPC runs with contact,</text>
-  <text x="972" y="472" font-size="16" fill="#15202A">person crossing 0.5 m/s</text>
+  <text x="972" y="472" font-size="16" fill="#15202A">pedestrian at 0.5 m/s</text>
   <line x1="904" y1="496" x2="1140" y2="496" stroke="#E1E6EA" stroke-width="1"/>
   <text x="904" y="524" font-size="16" fill="#5A6875">Nav2 MPPI 3/3, RPP 2/2,</text>
   <text x="904" y="544" font-size="16" fill="#5A6875">NMPC without prediction 2/2</text>
